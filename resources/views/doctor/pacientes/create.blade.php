@@ -202,6 +202,16 @@
                                         @enderror
                                     </div>
                                 </div>
+                                <div class="form-check mb-3 mt-3">
+    <input class="form-check-input" type="checkbox" id="doctor_principal" name="doctor_principal" value="1" {{ old('doctor_principal', true) ? 'checked' : '' }}>
+    <label class="form-check-label" for="doctor_principal">
+        Establecer como médico principal
+    </label>
+    <small class="form-text text-muted d-block">
+        Si se marca esta opción, serás establecido como el médico principal del paciente.
+        Si hay otros médicos asignados, esto podría cambiar su médico principal actual.
+    </small>
+</div>
                             </div>
                             
                             <div class="form-group text-end">
@@ -243,14 +253,14 @@
                                 </div>
                                 
                                 <div class="form-check mb-4">
-                                    <input class="form-check-input" type="checkbox" id="doctor_principal" name="doctor_principal" {{ old('doctor_principal') ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="doctor_principal">
-                                        Establecer como doctor principal de este paciente
-                                    </label>
-                                    <div class="form-text text-muted">
-                                        Si marca esta opción, usted será designado como el médico principal del paciente. Si el paciente ya tiene un médico principal, este será reemplazado.
-                                    </div>
-                                </div>
+    <input class="form-check-input" type="checkbox" id="doctor_principal" name="doctor_principal" value="1" {{ old('doctor_principal') ? 'checked' : '' }}>
+    <label class="form-check-label" for="doctor_principal">
+        Establecer como médico principal
+    </label>
+    <small class="form-text text-muted d-block">
+        Si se marca esta opción, serás establecido como el médico principal del paciente.
+    </small>
+</div>
                                 
                                 <div class="form-group text-end">
                                     <a href="{{ route('doctor.pacientes.index') }}" class="btn btn-secondary me-2">

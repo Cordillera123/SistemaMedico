@@ -66,9 +66,9 @@ class ResultadoMedicoController extends BaseController
      * Mostrar formulario para crear un nuevo resultado médico
      * Solo disponible para doctores
      */
-    public function create()
+   public function create()
     {
-         /** @var \App\Models\User $user */
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isDoctor()) {
@@ -76,19 +76,23 @@ class ResultadoMedicoController extends BaseController
         }
         
         $doctor = $user->doctor;
+        
+        // CAMBIO: Obtener pacientes usando la relación muchos-a-muchos
         $pacientes = $doctor->pacientes()->with('user')->get();
         $tiposResultados = TipoResultado::all();
         
-        return view('resultados.create', compact('pacientes', 'tiposResultados'));
+        return view('doctor.resultados.create', compact('pacientes', 'tiposResultados'));
     }
 
     /**
      * Almacenar un nuevo resultado médico
      * Solo disponible para doctores
      */
-    public function store(Request $request)
+    // Modificar el método store en ResultadoMedicoController
+
+ public function store(Request $request)
     {
-         /** @var \App\Models\User $user */
+        /** @var \App\Models\User $user */
         $user = Auth::user();
         
         if (!$user->isDoctor()) {
@@ -102,7 +106,7 @@ class ResultadoMedicoController extends BaseController
             'tipo_resultado_id' => 'required|exists:tipos_resultados,id',
             'titulo' => 'required|string|max:255',
             'descripcion' => 'nullable|string',
-            'archivo_pdf' => 'required|file|mimes:pdf|max:10240', // Máximo 10MB
+            'archivo_pdf' => 'required|file|mimes:pdf|max:10240',
             'fecha_resultado' => 'required|date',
             'confidencial' => 'boolean',
         ]);
@@ -113,16 +117,24 @@ class ResultadoMedicoController extends BaseController
                 ->withInput();
         }
         
-        // Verificar que el paciente pertenece a este doctor
-        $paciente = Paciente::where('id', $request->paciente_id)
-            ->where('doctor_id', $doctor->id)
-            ->firstOrFail();
+        // CAMBIO: Verificar que el paciente esté asignado a este doctor
+        $paciente = Paciente::findOrFail($request->paciente_id);
+        
+        $estaAsignado = $doctor->pacientes()
+            ->where('pacientes.id', $paciente->id)
+            ->exists();
+            
+        if (!$estaAsignado) {
+            return redirect()->back()
+                ->withErrors(['paciente_id' => 'Este paciente no está asignado a usted.'])
+                ->withInput();
+        }
 
         DB::beginTransaction();
 
         try {
             // Almacenar archivo PDF
-            $path = $request->file('archivo_pdf')->store('resultados_medicos');
+            $path = $request->file('archivo_pdf')->store('resultados_medicos', 'public');
 
             // Crear resultado médico
             $resultado = ResultadoMedico::create([
@@ -138,7 +150,9 @@ class ResultadoMedicoController extends BaseController
             ]);
 
             // Crear notificación para el paciente
-            ResultadoMedico::notificarNuevoResultado($resultado);
+            if (method_exists(ResultadoMedico::class, 'notificarNuevoResultado')) {
+                ResultadoMedico::notificarNuevoResultado($resultado);
+            }
 
             // Registrar acción
             LogSistema::registrar(
@@ -150,7 +164,7 @@ class ResultadoMedicoController extends BaseController
 
             DB::commit();
 
-            return redirect()->route('resultados.index')
+            return redirect()->route('doctor.resultados.index')
                 ->with('success', 'Resultado médico subido exitosamente');
         } catch (\Exception $e) {
             DB::rollBack();

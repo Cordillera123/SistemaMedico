@@ -1,5 +1,6 @@
 <?php
 
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,8 +13,7 @@ class Paciente extends Model
 
     protected $fillable = [
         'user_id',
-        'doctor_id',
-        'cedula', // Añadimos el campo de cédula
+        'cedula',
         'fecha_nacimiento',
         'genero',
         'tipo_sangre',
@@ -31,44 +31,45 @@ class Paciente extends Model
         return $this->belongsTo(User::class);
     }
 
-    // Relación con doctor
+    // Relación muchos-a-muchos con doctores
     public function doctores()
-{
-    return $this->belongsToMany(Doctor::class, 'doctor_paciente')
-                ->withPivot('doctor_principal')
-                ->withTimestamps();
-}
+    {
+        return $this->belongsToMany(Doctor::class, 'doctor_paciente')
+                    ->withPivot('doctor_principal')
+                    ->withTimestamps();
+    }
 
-public function doctorPrincipal()
-{
-    return $this->belongsToMany(Doctor::class, 'doctor_paciente')
-                ->wherePivot('doctor_principal', true)
-                ->first();
-}
+    // Obtener el doctor principal
+    public function doctorPrincipal()
+    {
+        return $this->doctores()
+                    ->wherePivot('doctor_principal', true)
+                    ->first();
+    }
 
-// Método auxiliar para verificar si un doctor es el principal
-public function esDoctorPrincipal(Doctor $doctor)
-{
-    return $this->doctores()
-                ->wherePivot('doctor_id', $doctor->id)
-                ->wherePivot('doctor_principal', true)
-                ->exists();
-}
+    // Verificar si un doctor es el principal
+    public function esDoctorPrincipal(Doctor $doctor)
+    {
+        return $this->doctores()
+                    ->wherePivot('doctor_id', $doctor->id)
+                    ->wherePivot('doctor_principal', true)
+                    ->exists();
+    }
 
-// Método para establecer un doctor como principal
-public function establecerDoctorPrincipal(Doctor $doctor)
-{
-    // Primero, quitar la marca de principal a todos los doctores
-    $this->doctores()->updateExistingPivot(
-        $this->doctores()->pluck('doctores.id')->toArray(),
-        ['doctor_principal' => false]
-    );
-    
-    // Establecer el nuevo doctor principal
-    $this->doctores()->updateExistingPivot($doctor->id, ['doctor_principal' => true]);
-    
-    return true;
-}
+    // Establecer un doctor como principal
+    public function establecerDoctorPrincipal(Doctor $doctor)
+    {
+        // Quitar la marca de principal a todos los doctores
+        $this->doctores()->updateExistingPivot(
+            $this->doctores()->pluck('doctores.id')->toArray(),
+            ['doctor_principal' => false]
+        );
+        
+        // Establecer el nuevo doctor principal
+        $this->doctores()->updateExistingPivot($doctor->id, ['doctor_principal' => true]);
+        
+        return true;
+    }
 
     // Relación con resultados médicos
     public function resultadosMedicos()
@@ -88,7 +89,7 @@ public function establecerDoctorPrincipal(Doctor $doctor)
         return $this->user->nombre_completo;
     }
 
-    // Obtener resultados médicos no vistos
+    // Resto de métodos auxiliares...
     public function resultadosNoVistos()
     {
         return $this->resultadosMedicos()
@@ -96,13 +97,11 @@ public function establecerDoctorPrincipal(Doctor $doctor)
                     ->get();
     }
 
-    // Cantidad de resultados médicos
     public function cantidadResultados()
     {
         return $this->resultadosMedicos()->count();
     }
 
-    // Cantidad de resultados médicos no vistos
     public function cantidadResultadosNoVistos()
     {
         return $this->resultadosMedicos()
@@ -110,21 +109,6 @@ public function establecerDoctorPrincipal(Doctor $doctor)
                     ->count();
     }
 
-    // Obtener resultados médicos por tipo
-    public function resultadosPorTipo($tipoId)
-    {
-        return $this->resultadosMedicos()
-                    ->where('tipo_resultado_id', $tipoId)
-                    ->get();
-    }
-
-    // Verificar si tiene alergias
-    public function tieneAlergias()
-    {
-        return !empty($this->alergias);
-    }
-
-    // Scope para buscar por cédula
     public function scopePorCedula($query, $cedula)
     {
         return $query->where('cedula', 'LIKE', "%{$cedula}%");

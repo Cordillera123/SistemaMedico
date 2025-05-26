@@ -1,201 +1,235 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Mi Médico')
+@section('title', 'Mis Médicos')
 
-@section('page-title', 'Mi Médico')
+@section('page-title', 'Mis Médicos')
 
 @section('breadcrumb')
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="{{ route('paciente.dashboard') }}">Dashboard</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Mi Médico</li>
+        <li class="breadcrumb-item active" aria-current="page">Mis Médicos</li>
     </ol>
 </nav>
 @endsection
 
 @section('dashboard-content')
 <div class="row">
+    <!-- Información de médicos -->
     <div class="col-xl-4 col-lg-5">
-        <!-- Tarjeta del perfil del médico -->
-        <div class="card mb-4">
-            <div class="card-body text-center">
-                <div class="avatar avatar-xl mx-auto mb-3">
-                    <div class="avatar-initial rounded-circle bg-primary">
-                        {{ substr($doctor->user->nombre, 0, 1) }}{{ substr($doctor->user->apellido, 0, 1) }}
+        @if($doctorPrincipal)
+            <!-- Médico Principal -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-star text-warning me-2"></i>Mi Médico Principal
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="avatar avatar-xl mx-auto mb-3">
+                        <div class="avatar-initial rounded-circle bg-primary">
+                            {{ substr($doctorPrincipal->user->nombre, 0, 1) }}{{ substr($doctorPrincipal->user->apellido, 0, 1) }}
+                        </div>
+                    </div>
+                    <h4 class="mb-1">Dr(a). {{ $doctorPrincipal->user->nombre }} {{ $doctorPrincipal->user->apellido }}</h4>
+                    <p class="text-muted mb-3">{{ $doctorPrincipal->especialidad }}</p>
+                    
+                    <div class="d-flex justify-content-center mb-3">
+                        @if($doctorPrincipal->user->telefono)
+                            <a href="tel:{{ $doctorPrincipal->user->telefono }}" class="btn btn-outline-primary btn-icon me-2" data-bs-toggle="tooltip" title="Llamar">
+                                <i class="fas fa-phone"></i>
+                            </a>
+                        @endif
+                        <a href="mailto:{{ $doctorPrincipal->user->email }}" class="btn btn-outline-primary btn-icon" data-bs-toggle="tooltip" title="Enviar correo">
+                            <i class="fas fa-envelope"></i>
+                        </a>
+                    </div>
+                    
+                    <!-- Estadísticas del médico principal -->
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h4 class="text-primary mb-0">{{ $estadisticasPorDoctor[$doctorPrincipal->id]['total_resultados'] ?? 0 }}</h4>
+                                <small class="text-muted">Resultados</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h4 class="text-danger mb-0">{{ $estadisticasPorDoctor[$doctorPrincipal->id]['resultados_nuevos'] ?? 0 }}</h4>
+                            <small class="text-muted">Nuevos</small>
+                        </div>
                     </div>
                 </div>
-                <h4 class="mb-1">Dr(a). {{ $doctor->user->nombre }} {{ $doctor->user->apellido }}</h4>
-                <p class="text-muted mb-3">{{ $doctor->especialidad }}</p>
-                
-                <div class="d-flex justify-content-center mb-3">
-                    @if($doctor->user->telefono)
-                        <a href="tel:{{ $doctor->user->telefono }}" class="btn btn-outline-primary btn-icon me-2" data-bs-toggle="tooltip" title="Llamar">
-                            <i class="fas fa-phone"></i>
-                        </a>
-                    @endif
-                    <a href="mailto:{{ $doctor->user->email }}" class="btn btn-outline-primary btn-icon" data-bs-toggle="tooltip" title="Enviar correo">
-                        <i class="fas fa-envelope"></i>
-                    </a>
+            </div>
+        @endif
+        
+        <!-- Otros médicos o todos si no hay principal -->
+        @if($doctores->count() > 1 || !$doctorPrincipal)
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        @if($doctorPrincipal)
+                            Otros Médicos
+                        @else
+                            Mis Médicos
+                        @endif
+                    </h5>
                 </div>
-                
-                <div class="divider">
-                    <div class="divider-text">Información de Contacto</div>
+                <div class="card-body p-0">
+                    @foreach($doctores as $doctor)
+                        @if(!$doctorPrincipal || $doctor->id !== $doctorPrincipal->id)
+                            <div class="d-flex align-items-center p-3 {{ !$loop->last ? 'border-bottom' : '' }}">
+                                <div class="flex-shrink-0">
+                                    <div class="avatar avatar-md">
+                                        <div class="avatar-initial rounded-circle bg-secondary">
+                                            {{ substr($doctor->user->nombre, 0, 1) }}{{ substr($doctor->user->apellido, 0, 1) }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6 class="mb-0">Dr(a). {{ $doctor->user->nombre }} {{ $doctor->user->apellido }}</h6>
+                                    <p class="text-muted mb-1 small">{{ $doctor->especialidad }}</p>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-light text-dark me-2">
+                                            {{ $estadisticasPorDoctor[$doctor->id]['total_resultados'] ?? 0 }} resultados
+                                        </span>
+                                        @if(($estadisticasPorDoctor[$doctor->id]['resultados_nuevos'] ?? 0) > 0)
+                                            <span class="badge bg-danger">
+                                                {{ $estadisticasPorDoctor[$doctor->id]['resultados_nuevos'] }} nuevos
+                                            </span>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="flex-shrink-0">
+                                    @if($doctor->user->telefono)
+                                        <a href="tel:{{ $doctor->user->telefono }}" class="btn btn-sm btn-outline-primary btn-icon me-1" data-bs-toggle="tooltip" title="Llamar">
+                                            <i class="fas fa-phone"></i>
+                                        </a>
+                                    @endif
+                                    <a href="mailto:{{ $doctor->user->email }}" class="btn btn-sm btn-outline-primary btn-icon" data-bs-toggle="tooltip" title="Enviar correo">
+                                        <i class="fas fa-envelope"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        @endif
+                    @endforeach
                 </div>
-                
-                <div class="text-start">
-                    <div class="mb-2">
-                        <div class="d-flex align-items-center">
+            </div>
+        @endif
+        
+        <!-- Información de contacto detallada -->
+        @if($doctorReferencia)
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Información de Contacto</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-2">
                             <div class="flex-shrink-0">
                                 <i class="fas fa-envelope text-primary me-2"></i>
                             </div>
                             <div class="flex-grow-1">
                                 <div class="small text-muted">Correo Electrónico</div>
-                                <div>{{ $doctor->user->email }}</div>
+                                <div>{{ $doctorReferencia->user->email }}</div>
                             </div>
                         </div>
-                    </div>
-                    
-                    @if($doctor->user->telefono)
-                        <div class="mb-2">
-                            <div class="d-flex align-items-center">
+                        
+                        @if($doctorReferencia->user->telefono)
+                            <div class="d-flex align-items-center mb-2">
                                 <div class="flex-shrink-0">
                                     <i class="fas fa-phone text-primary me-2"></i>
                                 </div>
                                 <div class="flex-grow-1">
                                     <div class="small text-muted">Teléfono</div>
-                                    <div>{{ $doctor->user->telefono }}</div>
+                                    <div>{{ $doctorReferencia->user->telefono }}</div>
                                 </div>
                             </div>
-                        </div>
-                    @endif
-                    
-                    @if($doctor->user->direccion)
-                        <div class="mb-2">
+                        @endif
+                        
+                        @if($doctorReferencia->user->direccion)
                             <div class="d-flex align-items-center">
                                 <div class="flex-shrink-0">
                                     <i class="fas fa-map-marker-alt text-primary me-2"></i>
                                 </div>
                                 <div class="flex-grow-1">
                                     <div class="small text-muted">Dirección</div>
-                                    <div>{{ $doctor->user->direccion }}</div>
+                                    <div>{{ $doctorReferencia->user->direccion }}</div>
+                                </div>
+                            </div>
+                        @endif
+                    </div>
+                    
+                    @if($doctorReferencia->horario_consulta)
+                        <div class="alert alert-info mb-0">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="ms-2">
+                                    <strong>Horario de Consulta:</strong><br>
+                                    {{ $doctorReferencia->horario_consulta }}
                                 </div>
                             </div>
                         </div>
                     @endif
                 </div>
             </div>
-        </div>
-        
-        <!-- Horarios de consulta -->
-        @if($doctor->horario_consulta)
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Horarios de Consulta</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="flex-shrink-0">
-                            <div class="avatar avatar-sm">
-                                <div class="avatar-initial rounded-circle bg-light">
-                                    <i class="fas fa-clock text-primary"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="ms-2">
-                            <h6 class="mb-0">Horario</h6>
-                            <p class="text-muted mb-0">{{ $doctor->horario_consulta }}</p>
-                        </div>
-                    </div>
-                    <div class="alert alert-info mb-0">
-                        <div class="d-flex">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-info-circle"></i>
-                            </div>
-                            <div class="ms-2">
-                                <p class="mb-0">Para agendar una cita, por favor contacte directamente con el médico a través de los datos de contacto proporcionados.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         @endif
     </div>
 
     <div class="col-xl-8 col-lg-7">
-        <!-- Detalles del médico -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Perfil Profesional</h5>
-            </div>
-            <div class="card-body">
-                @if($doctor->biografia)
-                    <div class="mb-4">
-                        <h6 class="mb-3">Biografía</h6>
-                        <p>{{ $doctor->biografia }}</p>
+        <!-- Estadísticas generales -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card stat-card stat-card-primary">
+                    <div class="card-body text-center">
+                        <h3 class="text-primary mb-1">{{ $totalResultados }}</h3>
+                        <p class="text-muted mb-0">Total de Resultados</p>
                     </div>
-                @endif
-                
-                <div class="mb-4">
-                    <h6 class="mb-3">Especialidad</h6>
-                    <p>{{ $doctor->especialidad }}</p>
                 </div>
-                
-                <div class="mb-4">
-                    <h6 class="mb-3">Licencia Médica</h6>
-                    <div class="badge bg-light text-dark">{{ $doctor->licencia_medica }}</div>
+            </div>
+            <div class="col-md-4">
+                <div class="card stat-card stat-card-success">
+                    <div class="card-body text-center">
+                        <h3 class="text-success mb-1">{{ $resultadosVistos }}</h3>
+                        <p class="text-muted mb-0">Resultados Vistos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card stat-card stat-card-danger">
+                    <div class="card-body text-center">
+                        <h3 class="text-danger mb-1">{{ $resultadosNoVistos }}</h3>
+                        <p class="text-muted mb-0">Resultados Nuevos</p>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <!-- Mis resultados con este médico -->
+        <!-- Resultados médicos recientes -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Resultados Médicos</h5>
+                <h5 class="card-title mb-0">Resultados Médicos Recientes</h5>
                 <a href="{{ route('paciente.resultados.index') }}" class="btn btn-sm btn-primary">
                     <i class="fas fa-list me-1"></i> Ver Todos
                 </a>
             </div>
             <div class="card-body">
-                @php
-                    $resultados = Auth::user()->paciente->resultadosMedicos()
-                        ->where('doctor_id', $doctor->id)
-                        ->with('tipoResultado')
-                        ->latest()
-                        ->take(5)
-                        ->get();
-                    
-                    $totalResultados = Auth::user()->paciente->resultadosMedicos()
-                        ->where('doctor_id', $doctor->id)
-                        ->count();
-                @endphp
-                
-                @if($resultados->count() > 0)
-                    <div class="text-center mb-4">
-                        <div class="mb-3">
-                            <h4 class="mb-0">{{ $totalResultados }}</h4>
-                            <p class="text-muted">Resultados totales</p>
-                        </div>
-                        <div class="progress mb-4" style="height: 8px;">
-                            @php
-                                $vistos = $resultados->where('visto_por_paciente', true)->count();
-                                $porcentajeVistos = $resultados->count() > 0 ? ($vistos / $resultados->count()) * 100 : 0;
-                            @endphp
-                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ $porcentajeVistos }}%" aria-valuenow="{{ $porcentajeVistos }}" aria-valuemin="0" aria-valuemax="100"></div>
-                        </div>
-                    </div>
-                    
+                @if($resultadosRecientes->count() > 0)
                     <div class="table-responsive">
                         <table class="table table-hover align-middle">
                             <thead>
                                 <tr>
                                     <th>Resultado</th>
+                                    <th>Médico</th>
                                     <th>Tipo</th>
                                     <th>Fecha</th>
+                                    <th>Estado</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($resultados as $resultado)
+                                @foreach($resultadosRecientes as $resultado)
                                     <tr>
                                         <td>
                                             <div class="d-flex align-items-center">
@@ -212,15 +246,42 @@
                                             </div>
                                         </td>
                                         <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar avatar-sm me-2">
+                                                    <div class="avatar-initial rounded-circle bg-primary">
+                                                        {{ substr($resultado->doctor->user->nombre, 0, 1) }}{{ substr($resultado->doctor->user->apellido, 0, 1) }}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div class="small">Dr(a). {{ $resultado->doctor->user->apellido }}</div>
+                                                    @if($doctorPrincipal && $resultado->doctor->id === $doctorPrincipal->id)
+                                                        <span class="badge bg-warning text-dark small">Principal</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
                                             <span class="badge bg-light text-dark">
                                                 {{ $resultado->tipoResultado->nombre }}
                                             </span>
                                         </td>
                                         <td>{{ $resultado->fecha_resultado->format('d/m/Y') }}</td>
                                         <td>
-                                            <a href="{{ route('paciente.resultados.show', $resultado->id) }}" class="btn btn-sm btn-outline-info">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
+                                            @if($resultado->visto_por_paciente)
+                                                <span class="badge bg-success">Visto</span>
+                                            @else
+                                                <span class="badge bg-danger">Nuevo</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{{ route('paciente.resultados.show', $resultado->id) }}" class="btn btn-outline-info">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{{ route('paciente.resultados.descargar', $resultado->id) }}" class="btn btn-outline-primary">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -233,7 +294,7 @@
                             <i class="fas fa-file-medical fa-4x text-muted"></i>
                         </div>
                         <h5>No hay resultados médicos</h5>
-                        <p class="text-muted">Actualmente no tienes resultados médicos con este doctor.</p>
+                        <p class="text-muted">Actualmente no tienes resultados médicos disponibles.</p>
                     </div>
                 @endif
             </div>
@@ -244,33 +305,19 @@
 
 @section('styles')
 <style>
-    .divider {
-        display: flex;
-        align-items: center;
-        margin: 1rem 0;
-    }
-    
-    .divider::before,
-    .divider::after {
-        content: '';
-        flex: 1;
-        border-bottom: 1px solid #e5e7eb;
-    }
-    
-    .divider-text {
-        padding: 0 1rem;
-        font-size: 0.875rem;
-        color: #6b7280;
-    }
-    
     .btn-icon {
-        width: 40px;
-        height: 40px;
+        width: 32px;
+        height: 32px;
         padding: 0;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         border-radius: 50%;
+    }
+    
+    .stat-card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
     }
 </style>
 @endsection

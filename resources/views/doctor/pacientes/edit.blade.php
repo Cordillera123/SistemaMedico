@@ -41,7 +41,8 @@
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="cedula" class="form-label">Cédula</label>
-                        <input type="text" class="form-control" id="cedula" value="{{ $paciente->user->cedula ?? 'No registrada' }}" readonly disabled>
+                        {{-- CORRECCIÓN: La cédula ahora está en la tabla pacientes, no en users --}}
+                        <input type="text" class="form-control" id="cedula" value="{{ $paciente->cedula ?? 'No registrada' }}" readonly disabled>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label for="fecha_nacimiento" class="form-label">Fecha de Nacimiento</label>
@@ -114,7 +115,7 @@
                 <div class="row">
                     <div class="col-md-12 mb-3">
                         <label for="alergias" class="form-label">Alergias</label>
-                        <textarea class="form-control @error('alergias') is-invalid @enderror" id="alergias" name="alergias" rows="2">{{ old('alergias', $paciente->alergias) }}</textarea>
+                        <textarea class="form-control @error('alergias') is-invalid @enderror" id="alergias" name="alergias" rows="2" placeholder="Describe las alergias conocidas del paciente...">{{ old('alergias', $paciente->alergias) }}</textarea>
                         @error('alergias')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
@@ -124,7 +125,7 @@
                 <div class="row">
                     <div class="col-md-12 mb-3">
                         <label for="antecedentes_medicos" class="form-label">Antecedentes Médicos</label>
-                        <textarea class="form-control @error('antecedentes_medicos') is-invalid @enderror" id="antecedentes_medicos" name="antecedentes_medicos" rows="4">{{ old('antecedentes_medicos', $paciente->antecedentes_medicos) }}</textarea>
+                        <textarea class="form-control @error('antecedentes_medicos') is-invalid @enderror" id="antecedentes_medicos" name="antecedentes_medicos" rows="4" placeholder="Describe los antecedentes médicos relevantes del paciente...">{{ old('antecedentes_medicos', $paciente->antecedentes_medicos) }}</textarea>
                         @error('antecedentes_medicos')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
@@ -142,6 +143,14 @@
                     </div>
                 </div>
             </div>
+            
+            {{-- Mostrar errores generales si existen --}}
+            @if ($errors->has('general'))
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    {{ $errors->first('general') }}
+                </div>
+            @endif
             
             <div class="form-group text-end">
                 <a href="{{ route('doctor.pacientes.show', $paciente->id) }}" class="btn btn-secondary me-2">
@@ -180,6 +189,17 @@
         font-weight: 600;
         color: #1f2937;
         margin-bottom: 1.25rem;
+    }
+    
+    /* Mejora visual para campos editables */
+    .form-section:last-of-type .form-control:not([readonly]):not([disabled]) {
+        border-color: #22c55e;
+        box-shadow: 0 0 0 0.2rem rgba(34, 197, 94, 0.1);
+    }
+    
+    .form-section:last-of-type .form-control:not([readonly]):not([disabled]):focus {
+        border-color: #16a34a;
+        box-shadow: 0 0 0 0.25rem rgba(34, 197, 94, 0.25);
     }
 </style>
 @endsection

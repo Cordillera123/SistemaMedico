@@ -50,15 +50,25 @@
                             <option value="">Seleccione un paciente</option>
                             @foreach($pacientes as $paciente)
                                 <option value="{{ $paciente->id }}" 
-                                    data-cedula="{{ $paciente->cedula }}"
+                                    data-cedula="{{ $paciente->cedula ?? 'N/A' }}"
                                     {{ old('paciente_id', request('paciente_id')) == $paciente->id ? 'selected' : '' }}>
-                                    {{ $paciente->user->nombre }} {{ $paciente->user->apellido }} - {{ $paciente->cedula }}
+                                    {{ $paciente->user->nombre }} {{ $paciente->user->apellido }} 
+                                    @if($paciente->cedula)
+                                        - {{ $paciente->cedula }}
+                                    @endif
                                 </option>
                             @endforeach
                         </select>
                         @error('paciente_id')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
+                        
+                        @if(count($pacientes) == 0)
+                            <div class="alert alert-warning mt-2">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No tiene pacientes asignados. <a href="{{ route('doctor.pacientes.create') }}" class="alert-link">Registre un paciente</a> antes de subir resultados.
+                            </div>
+                        @endif
                     </div>
                     <div class="col-md-6 mb-3">
                         <label for="tipo_resultado_id" class="form-label">Tipo de Resultado <span class="text-danger">*</span></label>
@@ -106,6 +116,18 @@
                         @enderror
                     </div>
                 </div>
+                
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="confidencial" name="confidencial" {{ old('confidencial') ? 'checked' : '' }}>
+                            <label class="form-check-label" for="confidencial">
+                                Marcar como confidencial
+                            </label>
+                            <small class="form-text text-muted d-block">Los resultados confidenciales solo son visibles para el paciente y los doctores asignados.</small>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Archivo PDF -->
@@ -126,23 +148,11 @@
                 </div>
             </div>
             
-            <!-- Opciones Adicionales -->
-            <div class="form-section">
-                <h6 class="form-section-title">Opciones Adicionales</h6>
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="confidencial" name="confidencial" {{ old('confidencial') ? 'checked' : '' }}>
-                    <label class="form-check-label" for="confidencial">
-                        Marcar como confidencial
-                    </label>
-                    <div class="form-text">Los resultados confidenciales solo pueden ser vistos por el médico y el paciente.</div>
-                </div>
-            </div>
-            
             <div class="form-group text-end">
                 <a href="{{ route('doctor.resultados.index') }}" class="btn btn-secondary me-2">
                     <i class="fas fa-times me-1"></i> Cancelar
                 </a>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" id="btnGuardar">
                     <i class="fas fa-save me-1"></i> Guardar Resultado
                 </button>
             </div>
@@ -158,6 +168,7 @@
         const form = document.querySelector('form');
         const fileInput = document.getElementById('archivo_pdf');
         const maxFileSize = 10 * 1024 * 1024; // 10 MB en bytes
+        const btnGuardar = document.getElementById('btnGuardar');
         
         form.addEventListener('submit', function(e) {
             if (fileInput.files.length > 0) {
@@ -166,7 +177,12 @@
                 if (fileSize > maxFileSize) {
                     e.preventDefault();
                     alert('El archivo excede el tamaño máximo permitido de 10 MB.');
+                    return;
                 }
+                
+                // Deshabilitar el botón para evitar múltiples envíos
+                btnGuardar.disabled = true;
+                btnGuardar.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Guardando...';
             }
         });
         
@@ -194,12 +210,52 @@
                     // Seleccionar este paciente
                     pacienteSelect.value = option.value;
                     encontrado = true;
+                    
+                    // Efecto visual para destacar que se encontró
+                    pacienteSelect.classList.add('is-valid');
+                    setTimeout(() => {
+                        pacienteSelect.classList.remove('is-valid');
+                    }, 2000);
+                    
                     break;
                 }
             }
             
             if (!encontrado) {
                 alert('No se encontró ningún paciente con la cédula indicada.');
+                searchCedula.classList.add('is-invalid');
+                setTimeout(() => {
+                    searchCedula.classList.remove('is-invalid');
+                }, 2000);
+            }
+        });
+        
+        // También permitir buscar presionando Enter
+        searchCedula.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                btnSearchCedula.click();
+            }
+        });
+        
+        // Vista previa del nombre del archivo seleccionado
+        fileInput.addEventListener('change', function() {
+            const fileName = this.files[0]?.name || 'Ningún archivo seleccionado';
+            const fileSize = this.files[0]?.size || 0;
+            const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+            
+            const fileLabel = this.nextElementSibling;
+            fileLabel.textContent = fileName;
+            
+            // Mostrar tamaño del archivo
+            const fileText = document.querySelector('.form-text');
+            if (fileSize > 0) {
+                fileText.innerHTML = `Archivo seleccionado: <strong>${fileName}</strong> (${fileSizeMB} MB)`;
+                
+                // Añadir advertencia si el archivo es grande pero menor al límite
+                if (fileSize > maxFileSize * 0.7 && fileSize <= maxFileSize) {
+                    fileText.innerHTML += ' <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> El archivo es grande, pero aún está dentro del límite permitido.</span>';
+                }
             }
         });
     });

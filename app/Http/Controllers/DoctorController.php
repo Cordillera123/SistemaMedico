@@ -169,20 +169,23 @@ public function pacientesIndex(Request $request)
     /**
      * Almacenar nuevo paciente
      */
-   public function pacientesStore(Request $request)
+
+
+// Modificación del método pacientesStore para manejar el checkbox de doctor principal para nuevos pacientes
+
+public function pacientesStore(Request $request)
 {
     /** @var \App\Models\User $user */
     $user = Auth::user();
     $doctor = $user->doctor;
     
     // Determinar si estamos creando un nuevo paciente o eligiendo uno existente
-    $isExistingPatient = $request->has('paciente_existente') && $request->paciente_existente;
+    $isExistingPatient = $request->has('paciente_existente');
     
     if ($isExistingPatient) {
-        // Validar ID del paciente existente
+        // Código para paciente existente - sin cambios
         $validator = Validator::make($request->all(), [
             'paciente_id' => 'required|exists:pacientes,id',
-            'doctor_principal' => 'boolean',
         ]);
         
         if ($validator->fails()) {
@@ -206,13 +209,16 @@ public function pacientesIndex(Request $request)
                     ->withInput();
             }
             
+            // El checkbox estará presente en la solicitud solo si está marcado
+            $esDoctorPrincipal = $request->has('doctor_principal');
+            
             // Establecer la relación
             $doctor->pacientes()->attach($paciente->id, [
-                'doctor_principal' => $request->has('doctor_principal') && $request->doctor_principal ? true : false
+                'doctor_principal' => $esDoctorPrincipal
             ]);
             
             // Si se establece como doctor principal, actualizar al paciente
-            if ($request->has('doctor_principal') && $request->doctor_principal) {
+            if ($esDoctorPrincipal) {
                 $paciente->establecerDoctorPrincipal($doctor);
             }
             
@@ -235,7 +241,7 @@ public function pacientesIndex(Request $request)
                 ->withInput();
         }
     } else {
-        // Crear un nuevo paciente igual que antes
+        // Crear un nuevo paciente
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:255',
             'apellido' => 'required|string|max:255',
@@ -244,6 +250,7 @@ public function pacientesIndex(Request $request)
             'password' => 'required|string|min:8|confirmed',
             'telefono' => 'nullable|string|max:20',
             'direccion' => 'nullable|string|max:255',
+            'cedula' => 'required|string|max:20',
             'fecha_nacimiento' => 'required|date',
             'genero' => 'required|string|max:20',
             'tipo_sangre' => 'nullable|string|max:10',
@@ -280,9 +287,10 @@ public function pacientesIndex(Request $request)
                 'activo' => true,
             ]);
 
-            // Crear paciente (sin doctor_id ahora)
+            // Crear paciente
             $paciente = Paciente::create([
                 'user_id' => $user->id,
+                'cedula' => $request->cedula,
                 'fecha_nacimiento' => $request->fecha_nacimiento,
                 'genero' => $request->genero,
                 'tipo_sangre' => $request->tipo_sangre,
@@ -290,9 +298,12 @@ public function pacientesIndex(Request $request)
                 'antecedentes_medicos' => $request->antecedentes_medicos,
             ]);
 
-            // Crear la relación doctor-paciente
+            // CAMBIO AQUÍ: Ahora verificamos si el checkbox está marcado
+            $esDoctorPrincipal = $request->has('doctor_principal');
+            
+            // Crear la relación doctor-paciente con el valor del checkbox
             $doctor->pacientes()->attach($paciente->id, [
-                'doctor_principal' => true // Por defecto, al crear un paciente nuevo el doctor es principal
+                'doctor_principal' => $esDoctorPrincipal
             ]);
 
             // Registrar acción
@@ -319,18 +330,16 @@ public function pacientesIndex(Request $request)
     /**
      * Mostrar información de un paciente
      */
-   public function pacientesShow($id)
+  public function pacientesShow($id)
 {
     $doctor = Auth::user()->doctor;
     
-    // Verificar si el paciente está asignado a este doctor
+    // CAMBIO: Verificar que el paciente esté asignado a este doctor usando la nueva relación
     $paciente = $doctor->pacientes()
         ->where('pacientes.id', $id)
+        ->with('user')
         ->firstOrFail();
-    
-    // Si lo encontramos, cargar el usuario y otros datos necesarios
-    $paciente->load('user');
-    
+
     $resultados = ResultadoMedico::where('paciente_id', $paciente->id)
         ->where('doctor_id', $doctor->id)
         ->with('tipoResultado')
@@ -389,22 +398,30 @@ public function setPrincipal($id)
      * Mostrar formulario para editar paciente
      */
     public function pacientesEdit($id)
-    {
-        $doctor = Auth::user()->doctor;
-        $paciente = Paciente::with('user')
-            ->where('doctor_id', $doctor->id)
-            ->findOrFail($id);
-        
-        return view('doctor.pacientes.edit', compact('paciente'));
-    }
+{
+    $doctor = Auth::user()->doctor;
+    
+    // CAMBIO: Verificar que el paciente esté asignado a este doctor usando la nueva relación
+    $paciente = $doctor->pacientes()
+        ->where('pacientes.id', $id)
+        ->with('user')
+        ->firstOrFail();
+    
+    return view('doctor.pacientes.edit', compact('paciente'));
+}
 
     /**
      * Actualizar paciente
      */
-   public function pacientesUpdate(Request $request, $id)
+  public function pacientesUpdate(Request $request, $id)
 {
     $doctor = Auth::user()->doctor;
-    $paciente = Paciente::where('doctor_id', $doctor->id)->findOrFail($id);
+    
+    // CAMBIO: Verificar que el paciente esté asignado a este doctor
+    $paciente = $doctor->pacientes()
+        ->where('pacientes.id', $id)
+        ->firstOrFail();
+    
     $user = $paciente->user;
 
     // Validar solo los campos editables
@@ -471,9 +488,11 @@ public function setPrincipal($id)
     /**
      * Mostrar formulario para subir un resultado médico
      */
-    public function resultadosCreate()
+   public function resultadosCreate()
     {
         $doctor = Auth::user()->doctor;
+        
+        // CAMBIO: Obtener pacientes usando la relación muchos-a-muchos
         $pacientes = $doctor->pacientes()->with('user')->get();
         $tiposResultados = TipoResultado::all();
         
@@ -503,16 +522,25 @@ public function setPrincipal($id)
 
         $doctor = Auth::user()->doctor;
         
-        // Verificar que el paciente pertenece a este doctor
-        $paciente = Paciente::where('id', $request->paciente_id)
-            ->where('doctor_id', $doctor->id)
-            ->firstOrFail();
+        // CAMBIO CLAVE: Verificar que el paciente esté asignado a este doctor
+        $paciente = Paciente::findOrFail($request->paciente_id);
+        
+        $estaAsignado = $doctor->pacientes()
+            ->where('pacientes.id', $paciente->id)
+            ->exists();
+            
+        if (!$estaAsignado) {
+            return redirect()->back()
+                ->withErrors(['paciente_id' => 'Este paciente no está asignado a usted.'])
+                ->withInput();
+        }
 
         DB::beginTransaction();
 
         try {
-            // Almacenar archivo PDF
-          $path = $request->file('archivo_pdf')->store('resultados_medicos', 'public');
+            // Almacenar archivo PDF correctamente
+            $path = $request->file('archivo_pdf')->store('resultados_medicos', 'public');
+
             // Crear resultado médico
             $resultado = ResultadoMedico::create([
                 'paciente_id' => $paciente->id,
@@ -527,7 +555,9 @@ public function setPrincipal($id)
             ]);
 
             // Crear notificación para el paciente
-            ResultadoMedico::notificarNuevoResultado($resultado);
+            if (method_exists(ResultadoMedico::class, 'notificarNuevoResultado')) {
+                ResultadoMedico::notificarNuevoResultado($resultado);
+            }
 
             // Registrar acción
             LogSistema::registrar(
@@ -589,7 +619,7 @@ public function setPrincipal($id)
             'tipo_resultado_id' => 'required|exists:tipos_resultados,id',
             'titulo' => 'required|string|max:255',
             'descripcion' => 'nullable|string',
-            'archivo_pdf' => 'nullable|file|mimes:pdf|max:10240', // Máximo 10MB
+            'archivo_pdf' => 'nullable|file|mimes:pdf|max:10240',
             'fecha_resultado' => 'required|date',
             'confidencial' => 'boolean',
         ]);
@@ -606,11 +636,10 @@ public function setPrincipal($id)
             // Actualizar archivo PDF si se proporcionó uno nuevo
             if ($request->hasFile('archivo_pdf')) {
                 // Eliminar archivo anterior
-                Storage::delete($resultado->archivo_pdf);
+                Storage::disk('public')->delete($resultado->archivo_pdf);
                 
                 // Almacenar nuevo archivo
-               
-$path = $request->file('archivo_pdf')->store('resultados_medicos', 'public');
+                $path = $request->file('archivo_pdf')->store('resultados_medicos', 'public');
                 $resultado->archivo_pdf = $path;
                 
                 // Si se cambia el archivo, marcar como no visto por el paciente
@@ -629,7 +658,9 @@ $path = $request->file('archivo_pdf')->store('resultados_medicos', 'public');
 
             // Si se modificó sustancialmente, notificar al paciente nuevamente
             if ($request->hasFile('archivo_pdf') || $resultado->wasChanged('titulo') || $resultado->wasChanged('tipo_resultado_id')) {
-                ResultadoMedico::notificarNuevoResultado($resultado);
+                if (method_exists(ResultadoMedico::class, 'notificarNuevoResultado')) {
+                    ResultadoMedico::notificarNuevoResultado($resultado);
+                }
             }
 
             // Registrar acción
