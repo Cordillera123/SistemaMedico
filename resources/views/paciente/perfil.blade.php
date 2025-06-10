@@ -84,22 +84,65 @@
                         <span>{{ $paciente->tipo_sangre ?: 'No especificado' }}</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                        <span>Doctor Asignado:</span>
-                        <span>Dr(a). {{ $paciente->doctor->user->nombre }} {{ $paciente->doctor->user->apellido }}</span>
+                        <span>Médicos Asignados:</span>
+                        <span>
+                            @php
+                                $doctores = $paciente->doctores;
+                                $doctorPrincipal = $paciente->doctorPrincipal();
+                            @endphp
+                            
+                            @if($doctores->count() > 0)
+                                @if($doctorPrincipal)
+                                    Dr(a). {{ $doctorPrincipal->user->nombre }} {{ $doctorPrincipal->user->apellido }}
+                                    <span class="badge bg-success ms-1">Principal</span>
+                                    @if($doctores->count() > 1)
+                                        <br><small class="text-muted">+{{ $doctores->count() - 1 }} médico(s) más</small>
+                                    @endif
+                                @else
+                                    {{ $doctores->count() }} médico(s) asignado(s)
+                                @endif
+                            @else
+                                <span class="text-muted">Sin médicos asignados</span>
+                            @endif
+                        </span>
                     </li>
                 </ul>
                 
                 @if($paciente->alergias)
                     <div class="mt-3">
                         <h6 class="fw-medium">Alergias:</h6>
-                        <p class="mb-0">{{ $paciente->alergias }}</p>
+                        <div class="alert alert-warning small mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>{{ $paciente->alergias }}
+                        </div>
+                    </div>
+                @endif
+                
+                @if($paciente->antecedentes_medicos)
+                    <div class="mt-3">
+                        <h6 class="fw-medium">Antecedentes Médicos:</h6>
+                        <div class="alert alert-info small mb-0">
+                            <i class="fas fa-notes-medical me-2"></i>{{ Str::limit($paciente->antecedentes_medicos, 150) }}
+                        </div>
                     </div>
                 @endif
                 
                 <div class="mt-3 text-center">
-                    <a href="{{ route('paciente.mi-medico') }}" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-user-md me-1"></i> Ver Información de mi Médico
-                    </a>
+                    @if($doctores->count() > 0)
+                        @if($doctores->count() == 1)
+                            <a href="{{ route('paciente.mi-medico') }}" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-user-md me-1"></i> Ver Información de mi Médico
+                            </a>
+                        @else
+                            <a href="{{ route('paciente.mi-medico') }}" class="btn btn-outline-primary btn-sm me-2">
+                                <i class="fas fa-user-md me-1"></i> Ver Médicos
+                            </a>
+                           
+                        @endif
+                    @else
+                        <div class="text-muted small">
+                            <i class="fas fa-info-circle me-1"></i> Contacta al administrador para asignar un médico
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -127,6 +170,14 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Mostrar errores generales si existen -->
+                    @if ($errors->has('general'))
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            {{ $errors->first('general') }}
+                        </div>
+                    @endif
                     
                     <!-- Información Personal -->
                     <div class="form-section">
@@ -178,7 +229,7 @@
                     
                     <!-- Cambio de Contraseña -->
                     <div class="form-section">
-                        <h6 class="form-section-title">Cambiar Contraseña</h6>
+                        <h6 class="form-section-title">Cambiar Contraseña <small class="text-muted">(Opcional)</small></h6>
                         <p class="text-muted mb-3">Deje estos campos en blanco si no desea cambiar su contraseña.</p>
                         
                         <div class="row">
@@ -205,6 +256,7 @@
                                 @error('password')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
+                                <div class="form-text">Mínimo 8 caracteres</div>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label for="password_confirmation" class="form-label">Confirmar Contraseña</label>

@@ -8,6 +8,7 @@ use App\Http\Controllers\ResultadoMedicoController;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -74,48 +75,61 @@ Route::middleware(['auth'])->group(function () {
         // Configuración del sistema
         Route::get('/configuracion', [AdminController::class, 'configuracion'])->name('admin.configuracion');
         Route::post('/configuracion', [AdminController::class, 'configuracionUpdate'])->name('admin.configuracion.update');
+        Route::post('/configuracion/reset', [AdminController::class, 'configuracionReset'])->name('admin.configuracion.reset'); // AGREGAR ESTA
+        
+ // Ruta para cambiar email del administrador - NUEVA
+    Route::put('/cambiar-email', [AdminController::class, 'cambiarEmail'])
+        ->name('admin.cambiar-email.update');
+
+         // Ruta para cambiar contraseña del administrador (ya no necesitas mostrarCambiarPassword)
+        Route::put('/cambiar-password', [AdminController::class, 'cambiarPassword'])
+        ->name('admin.cambiar-password.update');
+    // Mantenimiento - AGREGAR ESTAS
+    Route::post('/cache/limpiar', [AdminController::class, 'limpiarCache'])->name('admin.cache.limpiar');
+    Route::post('/logs/purgar', [AdminController::class, 'purgarLogs'])->name('admin.logs.purgar');
     });
 
-    // Rutas para doctores
-    Route::prefix('doctor')->middleware(['role:doctor'])->group(function () {
+  // Rutas para doctores
+    Route::prefix('doctor')->middleware(['role:doctor'])->name('doctor.')->group(function () {
         // Dashboard
-        Route::get('/dashboard', [DoctorController::class, 'dashboard'])->name('doctor.dashboard');
+        Route::get('/dashboard', [DoctorController::class, 'dashboard'])->name('dashboard');
         
         // Gestión de pacientes
-        Route::get('/pacientes', [DoctorController::class, 'pacientesIndex'])->name('doctor.pacientes.index');
-        Route::get('/pacientes/create', [DoctorController::class, 'pacientesCreate'])->name('doctor.pacientes.create');
-        Route::post('/pacientes', [DoctorController::class, 'pacientesStore'])->name('doctor.pacientes.store');
-        Route::get('/pacientes/{id}', [DoctorController::class, 'pacientesShow'])->name('doctor.pacientes.show');
-        Route::get('/pacientes/{id}/edit', [DoctorController::class, 'pacientesEdit'])->name('doctor.pacientes.edit');
-        Route::put('/pacientes/{id}', [DoctorController::class, 'pacientesUpdate'])->name('doctor.pacientes.update');
-        Route::put('/doctor/pacientes/{id}/set-principal', [App\Http\Controllers\DoctorController::class, 'setPrincipal'])
-    ->name('doctor.pacientes.set-principal');
-        // Gestión de resultados médicos
-        Route::get('/resultados', [DoctorController::class, 'resultadosIndex'])->name('doctor.resultados.index');
-        Route::get('/resultados/create', [DoctorController::class, 'resultadosCreate'])->name('doctor.resultados.create');
-        Route::post('/resultados', [DoctorController::class, 'resultadosStore'])->name('doctor.resultados.store');
-        Route::get('/resultados/{id}', [DoctorController::class, 'resultadosShow'])->name('doctor.resultados.show');
-        Route::get('/resultados/{id}/edit', [DoctorController::class, 'resultadosEdit'])->name('doctor.resultados.edit');
-        Route::put('/resultados/{id}', [DoctorController::class, 'resultadosUpdate'])->name('doctor.resultados.update');
-        Route::delete('/resultados/{id}', [DoctorController::class, 'resultadosDestroy'])->name('doctor.resultados.destroy');
+        Route::get('/pacientes', [DoctorController::class, 'pacientesIndex'])->name('pacientes.index');
+        Route::get('/pacientes/create', [DoctorController::class, 'pacientesCreate'])->name('pacientes.create');
+        Route::post('/pacientes', [DoctorController::class, 'pacientesStore'])->name('pacientes.store');
+        Route::get('/pacientes/buscar-cedula', [DoctorController::class, 'buscarPacientePorCedula'])
+            ->name('pacientes.buscar-cedula');
+        Route::get('/pacientes/{id}', [DoctorController::class, 'pacientesShow'])->name('pacientes.show');
+        Route::get('/pacientes/{id}/edit', [DoctorController::class, 'pacientesEdit'])->name('pacientes.edit');
+        Route::put('/pacientes/{id}', [DoctorController::class, 'pacientesUpdate'])->name('pacientes.update');
+        Route::put('/pacientes/{id}/set-principal', [DoctorController::class, 'setPrincipal'])
+            ->name('pacientes.set-principal');
         
-        // Búsqueda por cédula - API
-        Route::get('/pacientes/buscar-por-cedula', [DoctorController::class, 'buscarPacientePorCedula'])
-            ->name('doctor.pacientes.buscar-por-cedula');
+        // Gestión de resultados médicos - ORDEN CRÍTICO
+        Route::get('/resultados', [DoctorController::class, 'resultadosIndex'])->name('resultados.index');
         
-        // Búsqueda de resultados por cédula - API
+        // ¡IMPORTANTE! Estas rutas específicas DEBEN ir ANTES que las rutas con parámetros
+        Route::get('/resultados/buscar-cedula', [DoctorController::class, 'resultadosBuscarPorCedula'])
+            ->name('resultados.buscar-cedula');
         Route::get('/resultados/por-cedula', [DoctorController::class, 'resultadosPorCedulaPaciente'])
-            ->name('doctor.resultados.por-cedula');
+            ->name('resultados.por-cedula');
+        Route::get('/resultados/create', [DoctorController::class, 'resultadosCreate'])
+            ->name('resultados.create');
         
-        // Vista para búsqueda por cédula - ACTUALIZADA
-        Route::get('/resultados/buscar-por-cedula', [DoctorController::class, 'resultadosBuscarPorCedula'])
-            ->name('doctor.resultados.buscar-cedula');
+        // Rutas con parámetros van AL FINAL
+        Route::post('/resultados', [DoctorController::class, 'resultadosStore'])->name('resultados.store');
+        Route::get('/resultados/{id}/edit', [DoctorController::class, 'resultadosEdit'])->name('resultados.edit');
+        Route::put('/resultados/{id}', [DoctorController::class, 'resultadosUpdate'])->name('resultados.update');
+        Route::delete('/resultados/{id}', [DoctorController::class, 'resultadosDestroy'])->name('resultados.destroy');
+        
+        // Esta ruta DEBE ir al final porque captura cualquier cosa después de /resultados/
+        Route::get('/resultados/{id}', [DoctorController::class, 'resultadosShow'])->name('resultados.show');
         
         // Perfil del doctor
-        Route::get('/perfil', [DoctorController::class, 'perfil'])->name('doctor.perfil');
-        Route::put('/perfil', [DoctorController::class, 'perfilUpdate'])->name('doctor.perfil.update');
+        Route::get('/perfil', [DoctorController::class, 'perfil'])->name('perfil');
+        Route::put('/perfil', [DoctorController::class, 'perfilUpdate'])->name('perfil.update');
     });
-
     // Rutas para pacientes
     Route::prefix('paciente')->middleware(['role:paciente'])->group(function () {
         // Dashboard
@@ -123,11 +137,14 @@ Route::middleware(['auth'])->group(function () {
         
         // Resultados médicos
         Route::get('/resultados', [PacienteController::class, 'resultadosIndex'])->name('paciente.resultados.index');
+         Route::get('/resultados/{id}/descargar', [PacienteController::class, 'resultadosDescargar'])->name('paciente.resultados.descargar');
         Route::get('/resultados/{id}', [PacienteController::class, 'resultadosShow'])->name('paciente.resultados.show');
-        Route::get('/resultados/{id}/descargar', [PacienteController::class, 'resultadosDescargar'])->name('paciente.resultados.descargar');
+       
         
-        // Información de médico - URL corregida
+        // RUTAS FALTANTES AGREGADAS
+        // Información de médicos
         Route::get('/mi-medico', [PacienteController::class, 'miMedico'])->name('paciente.mi-medico');
+        Route::get('/mis-medicos', [PacienteController::class, 'misMedicos'])->name('paciente.mis-medicos');
         
         // Notificaciones
         Route::get('/notificaciones', [PacienteController::class, 'notificaciones'])->name('paciente.notificaciones');
@@ -153,4 +170,36 @@ Route::middleware(['auth'])->group(function () {
 // Fallback route - para URLs que no existen
 Route::fallback(function () {
     return redirect()->route('home')->with('error', 'Página no encontrada');
+});
+// AGREGAR AL FINAL DE web.php (TEMPORAL PARA DEBUG)
+Route::get('/debug-doctor-routes', function() {
+    $doctorRoutes = collect(Route::getRoutes())->filter(function($route) {
+        return str_contains($route->uri(), 'doctor/resultados');
+    })->map(function($route) {
+        return [
+            'name' => $route->getName(),
+            'uri' => $route->uri(),
+            'methods' => $route->methods(),
+            'action' => $route->getActionName()
+        ];
+    })->values();
+    
+    return response()->json([
+        'doctor_resultados_routes' => $doctorRoutes,
+        'expected_route' => 'doctor/resultados/buscar-cedula',
+        'route_exists' => Route::has('doctor.resultados.buscar-cedula'),
+        'route_url' => Route::has('doctor.resultados.buscar-cedula') ? route('doctor.resultados.buscar-cedula') : 'NOT_FOUND'
+    ]);
+});
+Route::get('/test-buscar-cedula-no-auth', function() {
+    try {
+        return view('doctor.resultados.buscar-cedula');
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'Error al cargar la vista',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]);
+    }
 });

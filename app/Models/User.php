@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -22,6 +24,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'direccion',
         'role_id',
         'activo',
+        'intentos_fallidos',
+        'bloqueado_hasta',
     ];
 
     protected $hidden = [
@@ -35,6 +39,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'bloqueado_hasta' => 'datetime',
         'expiracion_token' => 'datetime',
         'activo' => 'boolean',
+        'intentos_fallidos' => 'integer',
     ];
 
     // Relación con rol
@@ -76,32 +81,37 @@ class User extends Authenticatable implements MustVerifyEmail
     // Métodos helpers para verificar el rol
     public function isAdmin()
     {
-        return $this->role->nombre === 'administrador';
+        return $this->role && $this->role->nombre === 'administrador';
     }
 
     public function isDoctor()
     {
-        return $this->role->nombre === 'doctor';
+        return $this->role && $this->role->nombre === 'doctor';
     }
 
     public function isPaciente()
     {
-        return $this->role->nombre === 'paciente';
+        return $this->role && $this->role->nombre === 'paciente';
     }
 
     // Método para incrementar los intentos fallidos de login
     public function incrementarIntentosFallidos()
     {
-        $this->intentos_fallidos += 1;
+        $this->intentos_fallidos = ($this->intentos_fallidos ?? 0) + 1;
         $this->save();
 
         return $this->intentos_fallidos;
     }
 
-    // Método para bloquear al usuario
-    public function bloquear($minutos)
+    // Método para bloquear al usuario usando la configuración del sistema
+    public function bloquear($minutos = null)
     {
-        $this->bloqueado_hasta = now()->addMinutos($minutos);
+        // Si no se especifican minutos, usar la configuración del sistema
+        if ($minutos === null) {
+            $minutos = ConfiguracionSistema::obtenerValor('tiempo_bloqueo_minutos', 30);
+        }
+        
+        $this->bloqueado_hasta = Carbon::now()->addMinutes($minutos);
         $this->save();
     }
 
@@ -116,25 +126,41 @@ class User extends Authenticatable implements MustVerifyEmail
     // Verificar si el usuario está bloqueado
     public function estaBloqueado()
     {
-        return $this->bloqueado_hasta !== null && now()->lt($this->bloqueado_hasta);
+        return $this->bloqueado_hasta !== null && Carbon::now()->lt($this->bloqueado_hasta);
     }
 
-    // Generar token de recuperación
-    public function generarTokenRecuperacion($expiracionMinutos = 60)
+    // Generar token de recuperación usando la configuración del sistema
+    public function generarTokenRecuperacion()
     {
-        $this->token_recuperacion = \Illuminate\Support\Str::random(60);
-        $this->expiracion_token = now()->addMinutes($expiracionMinutos);
+        // Obtener tiempo de expiración de la configuración del sistema
+        $expiracionMinutos = ConfiguracionSistema::obtenerValor('tiempo_expiracion_token', 60);
+        
+        $token = Str::random(60);
+        $this->token_recuperacion = hash('sha256', $token);
+        $this->expiracion_token = Carbon::now()->addMinutes($expiracionMinutos);
         $this->save();
 
-        return $this->token_recuperacion;
+        return $token; // Retornar el token sin hash para enviarlo por email
     }
 
     // Validar token de recuperación
     public function validarTokenRecuperacion($token)
     {
-        return $this->token_recuperacion === $token && 
-               $this->expiracion_token !== null && 
-               now()->lt($this->expiracion_token);
+        if (!$this->token_recuperacion || !$this->expiracion_token) {
+            return false;
+        }
+        
+        // Verificar que el token coincida (comparar con hash)
+        if (hash('sha256', $token) !== $this->token_recuperacion) {
+            return false;
+        }
+        
+        // Verificar que no haya expirado
+        if (Carbon::now()->gt($this->expiracion_token)) {
+            return false;
+        }
+        
+        return true;
     }
 
     // Limpiar token de recuperación
@@ -143,5 +169,12 @@ class User extends Authenticatable implements MustVerifyEmail
         $this->token_recuperacion = null;
         $this->expiracion_token = null;
         $this->save();
+    }
+
+    // Verificar si el usuario ha excedido el máximo de intentos
+    public function haExcedidoIntentos()
+    {
+        $maxIntentos = ConfiguracionSistema::obtenerValor('max_intentos_login', 3);
+        return $this->intentos_fallidos >= $maxIntentos;
     }
 }

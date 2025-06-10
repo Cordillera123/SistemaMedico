@@ -193,8 +193,19 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="ratio ratio-16x9">
-                    <iframe src="{{ route('paciente.resultados.descargar', $resultado->id) }}" allowfullscreen></iframe>
+                <div id="pdf-loading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-2">Cargando PDF...</p>
+                </div>
+                <div class="ratio ratio-16x9" id="pdf-container" style="display: none;">
+                    <iframe id="pdf-iframe" src="" allowfullscreen style="border: none;"></iframe>
+                </div>
+                <div id="pdf-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> No se pudo cargar el PDF para previsualización.
+                    <br><a href="{{ route('paciente.resultados.descargar', $resultado->id) }}" class="alert-link">Descargue el archivo para verlo</a>.
                 </div>
             </div>
             <div class="modal-footer">
@@ -207,3 +218,93 @@
     </div>
 </div>
 @endsection
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pdfModal = document.getElementById('pdfViewerModal');
+    
+    if (pdfModal) {
+        pdfModal.addEventListener('show.bs.modal', function() {
+            cargarPdfPaciente();
+        });
+        
+        pdfModal.addEventListener('hidden.bs.modal', function() {
+            limpiarModalPaciente();
+        });
+    }
+});
+
+function cargarPdfPaciente() {
+    const iframe = document.getElementById('pdf-iframe');
+    const loading = document.getElementById('pdf-loading');
+    const container = document.getElementById('pdf-container');
+    const error = document.getElementById('pdf-error');
+    
+    // Resetear estados
+    loading.style.display = 'block';
+    container.style.display = 'none';
+    error.style.display = 'none';
+    
+    // Construir URL del PDF
+    const pdfFileName = '{{ $resultado->archivo_pdf }}';
+    const pdfUrl = `${window.location.origin}/storage/${pdfFileName}`;
+    
+    console.log('Paciente - Cargando PDF desde:', pdfUrl);
+    
+    // Verificar que el archivo existe
+    fetch(pdfUrl, { method: 'HEAD' })
+        .then(response => {
+            if (response.ok) {
+                console.log('Paciente - Archivo encontrado, cargando en iframe...');
+                
+                // Configurar eventos del iframe
+                iframe.onload = function() {
+                    console.log('Paciente - PDF cargado exitosamente');
+                    loading.style.display = 'none';
+                    container.style.display = 'block';
+                };
+                
+                iframe.onerror = function() {
+                    console.error('Paciente - Error en iframe al cargar PDF');
+                    mostrarErrorPaciente();
+                };
+                
+                // Cargar PDF en iframe
+                iframe.src = pdfUrl;
+                
+                // Timeout de seguridad
+                setTimeout(() => {
+                    if (loading.style.display !== 'none') {
+                        console.warn('Paciente - Timeout: El PDF tardó demasiado en cargar');
+                        mostrarErrorPaciente();
+                    }
+                }, 15000);
+                
+            } else {
+                console.error('Paciente - Archivo no encontrado. Status:', response.status);
+                mostrarErrorPaciente();
+            }
+        })
+        .catch(error => {
+            console.error('Paciente - Error al verificar archivo:', error);
+            mostrarErrorPaciente();
+        });
+}
+
+function mostrarErrorPaciente() {
+    document.getElementById('pdf-loading').style.display = 'none';
+    document.getElementById('pdf-error').style.display = 'block';
+}
+
+function limpiarModalPaciente() {
+    const iframe = document.getElementById('pdf-iframe');
+    if (iframe) {
+        iframe.src = '';
+    }
+    
+    // Resetear estados
+    document.getElementById('pdf-loading').style.display = 'block';
+    document.getElementById('pdf-container').style.display = 'none';
+    document.getElementById('pdf-error').style.display = 'none';
+}
+</script>

@@ -108,6 +108,10 @@ public function pacientesIndex(Request $request)
     // Devolver la vista con los datos
     return view('doctor.pacientes.index', compact('pacientes', 'generos', 'tiposSangre'));
 }
+    public function resultadosBuscarPorCedula()
+{
+    return view('doctor.resultados.buscar-cedula');
+}
     
     // Buscar paciente por cédula (para API)
     public function buscarPacientePorCedula(Request $request)
@@ -484,6 +488,7 @@ public function setPrincipal($id)
         
         return view('doctor.resultados.index', compact('resultados'));
     }
+
 
     /**
      * Mostrar formulario para subir un resultado médico
@@ -868,9 +873,6 @@ public function setPrincipal($id)
             })
         ]);
     }
-    public function resultadosBuscarPorCedula()
-    {
-        return view('doctor.resultados.buscar-cedula');
-    }
+    
 
 }

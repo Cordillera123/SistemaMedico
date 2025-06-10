@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfiguracionSistema;
 use App\Models\Doctor;
 use App\Models\LogSistema;
 use App\Models\Role;
 use App\Models\User;
 use Faker\Provider\Base;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 
 class AdminController extends BaseController
 {
@@ -324,17 +328,284 @@ class AdminController extends BaseController
     /**
      * Actualizar configuración del sistema
      */
+
+      /**
+     * Actualizar configuración del sistema
+     */
     public function configuracionUpdate(Request $request)
     {
-        foreach ($request->except('_token', '_method') as $clave => $valor) {
-            if (strpos($clave, 'config_') === 0) {
-                $clave = substr($clave, 7); // Quitar el prefijo 'config_'
-                \App\Models\ConfiguracionSistema::establecerValor($clave, $valor);
-            }
+        $validator = Validator::make($request->all(), [
+            'config_nombre_hospital' => 'nullable|string|max:255',
+            'config_max_intentos_login' => 'nullable|integer|min:1|max:10',
+            'config_tiempo_bloqueo_minutos' => 'nullable|integer|min:5|max:1440',
+            'config_tiempo_expiracion_token' => 'nullable|integer|min:5|max:1440',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
         }
 
-        LogSistema::registrar('Actualización de configuración del sistema');
-        
-        return redirect()->back()->with('success', 'Configuración actualizada exitosamente');
+        DB::beginTransaction();
+
+        try {
+            foreach ($request->except('_token', '_method') as $clave => $valor) {
+                if (strpos($clave, 'config_') === 0) {
+                    $clave = substr($clave, 7); // Quitar el prefijo 'config_'
+                    ConfiguracionSistema::establecerValor($clave, $valor);
+                }
+            }
+
+            LogSistema::registrar('Actualización de configuración del sistema');
+            
+            DB::commit();
+
+            return redirect()->back()->with('success', 'Configuración actualizada exitosamente');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al actualizar configuración: ' . $e->getMessage()]);
+        }
     }
+
+    /**
+     * Restablecer configuración por defecto
+     */
+    public function configuracionReset(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+            ConfiguracionSistema::resetearPorDefecto();
+            
+            LogSistema::registrar('Restablecimiento de configuración a valores por defecto');
+            
+            DB::commit();
+
+            return redirect()->back()->with('success', 'Configuración restablecida a valores por defecto');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al restablecer configuración: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Limpiar caché del sistema
+     */
+    public function limpiarCache(Request $request)
+    {
+        try {
+            Cache::flush();
+            
+            LogSistema::registrar('Limpieza de caché del sistema');
+            
+            return redirect()->back()->with('success', 'Caché del sistema limpiada exitosamente');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al limpiar caché: ' . $e->getMessage()]);
+        }
+    }
+    /**
+ * Mostrar formulario para cambiar contraseña del administrador
+ */
+public function mostrarCambiarPassword()
+{
+    return view('admin.configuracion.cambiar-password');
+}
+
+/**
+ * Actualizar contraseña del administrador
+ */
+public function cambiarPassword(Request $request)
+{
+    DB::beginTransaction();
+    
+    try {
+        $currentUser = Auth::user();
+        
+        // Verificar si ambos campos están completos
+        if ($request->filled('password_actual') && $request->filled('password')) {
+            // Verificar contraseña actual
+            if (!Hash::check($request->password_actual, $currentUser->password)) {
+                DB::rollBack();
+                return redirect()->back()
+                    ->withErrors(['password_actual' => 'La contraseña actual es incorrecta'])
+                    ->withInput();
+            }
+            
+            $validator = Validator::make($request->all(), [
+                'password' => 'required|string|min:8|confirmed',
+            ]);
+            
+            if ($validator->fails()) {
+                DB::rollBack();
+                return redirect()->back()
+                    ->withErrors($validator)
+                    ->withInput();
+            }
+            
+            // Verificar que la nueva contraseña sea diferente a la actual
+            if (Hash::check($request->password, $currentUser->password)) {
+                DB::rollBack();
+                return redirect()->back()
+                    ->withErrors(['password' => 'La nueva contraseña debe ser diferente a la actual'])
+                    ->withInput();
+            }
+            
+            // Actualizar contraseña - explicit type casting to avoid IDE errors
+            /** @var \App\Models\User $currentUser */
+            $currentUser->update([
+                'password' => Hash::make($request->password),
+            ]);
+            
+            // Alternativa si el error persiste:
+            // User::where('id', $currentUser->id)->update([
+            //     'password' => Hash::make($request->password),
+            // ]);
+            
+            // Registrar la acción en el log del sistema
+            LogSistema::registrar(
+                'Cambio de contraseña', 
+                'users', 
+                $currentUser->id,
+                "Administrador {$currentUser->nombre} {$currentUser->apellido} cambió su contraseña"
+            );
+            
+            DB::commit();
+            
+            return redirect()->back()
+                ->with('success', 'Contraseña actualizada exitosamente');
+        } else {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['general' => 'Debe proporcionar la contraseña actual y la nueva'])
+                ->withInput();
+        }
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->withErrors(['general' => 'Error al cambiar la contraseña: ' . $e->getMessage()])
+            ->withInput();
+    }
+}
+
+/**
+ * Actualizar email del administrador
+ */
+public function cambiarEmail(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'email_actual' => 'required|email',
+        'nuevo_email' => 'required|email|unique:users,email,' . Auth::id(),
+        'password_confirmacion' => 'required|string',
+    ], [
+        'email_actual.required' => 'El email actual es obligatorio',
+        'email_actual.email' => 'El email actual debe ser válido',
+        'nuevo_email.required' => 'El nuevo email es obligatorio',
+        'nuevo_email.email' => 'El nuevo email debe ser válido',
+        'nuevo_email.unique' => 'Este email ya está en uso por otro usuario',
+        'password_confirmacion.required' => 'La contraseña de confirmación es obligatoria',
+    ]);
+
+    if ($validator->fails()) {
+        return redirect()->back()
+            ->withErrors($validator)
+            ->withInput();
+    }
+
+    DB::beginTransaction();
+    
+    try {
+        $currentUser = Auth::user();
+        
+        // Verificar que el email actual coincida
+        if ($request->email_actual !== $currentUser->email) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['email_actual' => 'El email actual no coincide con el registrado'])
+                ->withInput();
+        }
+        
+        // Verificar que el nuevo email sea diferente al actual
+        if ($request->nuevo_email === $currentUser->email) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['nuevo_email' => 'El nuevo email debe ser diferente al actual'])
+                ->withInput();
+        }
+        
+        // Verificar la contraseña de confirmación
+        if (!Hash::check($request->password_confirmacion, $currentUser->password)) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['password_confirmacion' => 'La contraseña de confirmación es incorrecta'])
+                ->withInput();
+        }
+        
+        // Actualizar el email
+        /** @var \App\Models\User $currentUser */
+        $currentUser->update([
+            'email' => $request->nuevo_email,
+            'email_verified_at' => null, // Requerir nueva verificación si es necesario
+        ]);
+        
+        // Registrar la acción en el log del sistema
+        LogSistema::registrar(
+            'Cambio de email', 
+            'users', 
+            $currentUser->id,
+            "Administrador {$currentUser->nombre} {$currentUser->apellido} cambió su email de {$request->email_actual} a {$request->nuevo_email}"
+        );
+        
+        DB::commit();
+        
+        return redirect()->back()
+            ->with('success', 'Email actualizado exitosamente');
+            
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->withErrors(['general' => 'Error al cambiar el email: ' . $e->getMessage()])
+            ->withInput();
+    }
+}
+
+    /**
+     * Purgar logs antiguos
+     */
+    public function purgarLogs(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'dias' => 'required|integer|min:30|max:365',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $fecha = now()->subDays($request->dias);
+            $cantidad = LogSistema::where('created_at', '<', $fecha)->count();
+            
+            LogSistema::where('created_at', '<', $fecha)->delete();
+            
+            LogSistema::registrar("Purga de logs: {$cantidad} registros eliminados (más de {$request->dias} días)");
+            
+            DB::commit();
+
+            return redirect()->back()->with('success', "Se eliminaron {$cantidad} registros de logs antiguos");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al purgar logs: ' . $e->getMessage()]);
+        }
+    }
+
+    
+    
 }

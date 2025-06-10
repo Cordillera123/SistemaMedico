@@ -91,7 +91,7 @@
                     </div>
                 </div>
                 @if($totalDoctores > 1)
-                    <a href="{{ route('paciente.mis-medicos') }}" class="btn btn-sm btn-outline-success w-100">
+                    <a href="{{ route('paciente.mi-medico') }}" class="btn btn-sm btn-outline-success w-100">
                         Ver todos mis médicos <i class="fas fa-arrow-right ms-1"></i>
                     </a>
                 @elseif($doctorPrincipal)
@@ -324,9 +324,7 @@
                             <a href="{{ route('paciente.mi-medico') }}" class="btn btn-outline-primary btn-sm me-2">
                                 <i class="fas fa-info-circle me-1"></i> Ver información
                             </a>
-                            <a href="{{ route('paciente.mis-medicos') }}" class="btn btn-outline-secondary btn-sm">
-                                <i class="fas fa-users me-1"></i> Todos mis médicos
-                            </a>
+                            
                         @endif
                     </div>
                 </div>

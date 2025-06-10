@@ -189,6 +189,7 @@
 </div>
 
 <!-- Modal para visualizar PDF -->
+<!-- Modal para visualizar PDF -->
 <div class="modal fade" id="pdfViewerModal" tabindex="-1" aria-labelledby="pdfViewerModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-fullscreen-lg-down">
         <div class="modal-content">
@@ -197,8 +198,21 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="ratio ratio-16x9">
-                    <iframe src="{{ Storage::url($resultado->archivo_pdf) }}" allowfullscreen></iframe>
+                <div id="pdf-loading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="mt-2">Cargando PDF...</p>
+                    <small class="text-muted">Verificando archivo...</small>
+                </div>
+                <div class="ratio ratio-16x9" id="pdf-container" style="display: none;">
+                    <iframe id="pdf-iframe" src="" allowfullscreen style="border: none;"></iframe>
+                </div>
+                <div id="pdf-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> No se pudo cargar el PDF para previsualización.
+                    <br><small>El archivo se encuentra en: <code id="pdf-path"></code></small>
+                    <br><a href="{{ route('resultados.descargar', $resultado->id) }}" class="alert-link">Descargue el archivo para verlo</a>.
                 </div>
             </div>
             <div class="modal-footer">
@@ -235,3 +249,99 @@
     </div>
 </div>
 @endsection
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pdfModal = document.getElementById('pdfViewerModal');
+    
+    if (pdfModal) {
+        pdfModal.addEventListener('show.bs.modal', function() {
+            cargarPdf();
+        });
+        
+        pdfModal.addEventListener('hidden.bs.modal', function() {
+            limpiarModal();
+        });
+    }
+});
+
+function cargarPdf() {
+    const iframe = document.getElementById('pdf-iframe');
+    const loading = document.getElementById('pdf-loading');
+    const container = document.getElementById('pdf-container');
+    const error = document.getElementById('pdf-error');
+    const pathElement = document.getElementById('pdf-path');
+    
+    // Resetear estados
+    loading.style.display = 'block';
+    container.style.display = 'none';
+    error.style.display = 'none';
+    
+    // Construir URL del PDF basándose en la estructura que ya funciona
+    const pdfFileName = '{{ $resultado->archivo_pdf }}';
+    const pdfUrl = `${window.location.origin}/storage/${pdfFileName}`;
+    
+    // Mostrar la ruta para debug
+    if (pathElement) {
+        pathElement.textContent = pdfUrl;
+    }
+    
+    console.log('Cargando PDF desde:', pdfUrl);
+    
+    // Verificar que el archivo existe
+    fetch(pdfUrl, { method: 'HEAD' })
+        .then(response => {
+            if (response.ok) {
+                console.log('Archivo encontrado, cargando en iframe...');
+                
+                // Configurar eventos del iframe
+                iframe.onload = function() {
+                    console.log('PDF cargado exitosamente');
+                    loading.style.display = 'none';
+                    container.style.display = 'block';
+                };
+                
+                iframe.onerror = function() {
+                    console.error('Error en iframe al cargar PDF');
+                    mostrarError();
+                };
+                
+                // Cargar PDF en iframe
+                iframe.src = pdfUrl;
+                
+                // Timeout de seguridad más largo
+                setTimeout(() => {
+                    if (loading.style.display !== 'none') {
+                        console.warn('Timeout: El PDF tardó demasiado en cargar');
+                        mostrarError();
+                    }
+                }, 15000);
+                
+            } else {
+                console.error('Archivo no encontrado. Status:', response.status);
+                mostrarError();
+            }
+        })
+        .catch(error => {
+            console.error('Error al verificar archivo:', error);
+            mostrarError();
+        });
+}
+
+function mostrarError() {
+    document.getElementById('pdf-loading').style.display = 'none';
+    document.getElementById('pdf-error').style.display = 'block';
+}
+
+function limpiarModal() {
+    const iframe = document.getElementById('pdf-iframe');
+    if (iframe) {
+        iframe.src = '';
+    }
+    
+    // Resetear estados
+    document.getElementById('pdf-loading').style.display = 'block';
+    document.getElementById('pdf-container').style.display = 'none';
+    document.getElementById('pdf-error').style.display = 'none';
+}
+</script>
