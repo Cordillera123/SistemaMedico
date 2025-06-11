@@ -215,23 +215,5 @@
         </div>
     </div>
 </div>
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <h5 class="mb-2">Búsqueda Rápida por Cédula</h5>
-                <p class="text-muted mb-md-0">Busque rápidamente a un paciente por su número de cédula para ver sus resultados médicos.</p>
-            </div>
-            <div class="col-md-6">
-                <div class="input-group">
-                    <span class="input-group-text"><i class="fas fa-id-card"></i></span>
-                    <input type="text" class="form-control" placeholder="Ingresar cédula..." id="quickSearchCedula">
-                    <button class="btn btn-primary" type="button" onclick="redirectToCedulaSearch()">
-                        <i class="fas fa-search me-1"></i> Buscar
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
 @endsection

@@ -117,7 +117,7 @@
                     </div>
                     <div>
                         <h6 class="stat-card-title">MÉDICO PRINCIPAL</h6>
-                        @if($doctorPrincipal)
+                        @if($doctorPrincipal && $doctorPrincipal->user)
                             <h2 class="stat-card-value" style="font-size: 1.2rem;">
                                 Dr(a). {{ substr($doctorPrincipal->user->apellido, 0, 10) }}
                             </h2>
@@ -168,8 +168,20 @@
                                         <small class="text-muted">{{ $resultado->created_at->format('d/m/Y') }}</small>
                                     </div>
                                     <p class="text-muted small mb-0">
-                                        <span class="badge bg-light text-dark">{{ $resultado->tipoResultado->nombre }}</span>
-                                        <span class="text-muted">• Dr(a). {{ $resultado->doctor->user->apellido }}</span>
+                                        {{-- CORRECCIÓN: Verificar si tipoResultado existe --}}
+                                        @if($resultado->tipoResultado)
+                                            <span class="badge bg-light text-dark">{{ $resultado->tipoResultado->nombre }}</span>
+                                        @else
+                                            <span class="badge bg-light text-dark">Sin tipo</span>
+                                        @endif
+                                        
+                                        {{-- CORRECCIÓN: Verificar si doctor y su user existen --}}
+                                        @if($resultado->doctor && $resultado->doctor->user)
+                                            <span class="text-muted">• Dr(a). {{ $resultado->doctor->user->apellido }}</span>
+                                        @else
+                                            <span class="text-muted">• Doctor no disponible</span>
+                                        @endif
+                                        
                                         @if(!$resultado->visto_por_paciente)
                                             <span class="badge bg-danger ms-1">Nuevo</span>
                                         @endif
@@ -252,7 +264,7 @@
                     @endif
                 </div>
                 <div class="card-body">
-                    @if($doctorPrincipal)
+                    @if($doctorPrincipal && $doctorPrincipal->user)
                         <!-- Mostrar médico principal -->
                         <div class="text-center mb-3">
                             <div class="avatar avatar-lg mx-auto mb-3">
@@ -264,7 +276,7 @@
                                 Dr(a). {{ $doctorPrincipal->user->nombre }} {{ $doctorPrincipal->user->apellido }}
                                 <span class="badge bg-success ms-1">Principal</span>
                             </h5>
-                            <p class="text-muted mb-0">{{ $doctorPrincipal->especialidad }}</p>
+                            <p class="text-muted mb-0">{{ $doctorPrincipal->especialidad ?? 'Especialidad no especificada' }}</p>
                         </div>
                         <hr>
                         <div class="mb-3">
@@ -288,24 +300,27 @@
                     @else
                         <!-- Mostrar todos los médicos si no hay principal -->
                         @foreach($doctores->take(2) as $doctor)
-                            <div class="d-flex align-items-center mb-3 {{ !$loop->last ? 'border-bottom pb-3' : '' }}">
-                                <div class="flex-shrink-0">
-                                    <div class="avatar avatar-md">
-                                        <div class="avatar-initial rounded-circle bg-primary">
-                                            {{ substr($doctor->user->nombre, 0, 1) }}{{ substr($doctor->user->apellido, 0, 1) }}
+                            {{-- CORRECCIÓN: Verificar que el doctor y su user existan --}}
+                            @if($doctor && $doctor->user)
+                                <div class="d-flex align-items-center mb-3 {{ !$loop->last ? 'border-bottom pb-3' : '' }}">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar avatar-md">
+                                            <div class="avatar-initial rounded-circle bg-primary">
+                                                {{ substr($doctor->user->nombre, 0, 1) }}{{ substr($doctor->user->apellido, 0, 1) }}
+                                            </div>
                                         </div>
                                     </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <h6 class="mb-0">Dr(a). {{ $doctor->user->nombre }} {{ $doctor->user->apellido }}</h6>
+                                        <p class="text-muted mb-0 small">{{ $doctor->especialidad ?? 'Especialidad no especificada' }}</p>
+                                        @if($doctor->user->telefono)
+                                            <p class="text-muted mb-0 small">
+                                                <i class="fas fa-phone me-1"></i>{{ $doctor->user->telefono }}
+                                            </p>
+                                        @endif
+                                    </div>
                                 </div>
-                                <div class="flex-grow-1 ms-3">
-                                    <h6 class="mb-0">Dr(a). {{ $doctor->user->nombre }} {{ $doctor->user->apellido }}</h6>
-                                    <p class="text-muted mb-0 small">{{ $doctor->especialidad }}</p>
-                                    @if($doctor->user->telefono)
-                                        <p class="text-muted mb-0 small">
-                                            <i class="fas fa-phone me-1"></i>{{ $doctor->user->telefono }}
-                                        </p>
-                                    @endif
-                                </div>
-                            </div>
+                            @endif
                         @endforeach
                         
                         @if($totalDoctores > 2)
@@ -337,7 +352,11 @@
                 <div class="card-body text-center">
                     <i class="fas fa-user-md fa-4x text-muted mb-3"></i>
                     <h5>Sin médicos asignados</h5>
-                    <p class="text-muted">Actualmente no tienes médicos asignados. Contacta al administrador para que te asignen un médico.</p>
+                    <p class="text-muted">Actualmente no tienes médicos asignados. Puedes ver tus resultados médicos históricos en la sección de resultados.</p>
+                    {{-- CORRECCIÓN: Agregar enlace a resultados cuando no hay médicos --}}
+                    <a href="{{ route('paciente.resultados.index') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-file-medical me-1"></i> Ver mis resultados
+                    </a>
                 </div>
             </div>
         @endif

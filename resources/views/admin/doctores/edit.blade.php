@@ -89,13 +89,16 @@
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="activo" name="activo" {{ old('activo', $doctor->user->activo) ? 'checked' : '' }}>
+                            <!-- Campo oculto para asegurar que siempre se envíe un valor -->
+                            <input type="hidden" name="activo" value="0">
+                            <input class="form-check-input" type="checkbox" id="activo" name="activo" value="1" {{ old('activo', $doctor->user->activo) ? 'checked' : '' }}>
                             <label class="form-check-label" for="activo">
                                 Cuenta activa
                             </label>
                             <div class="form-text">Desmarque esta opción para desactivar temporalmente la cuenta del doctor.</div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
             

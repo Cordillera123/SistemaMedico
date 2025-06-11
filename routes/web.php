@@ -56,7 +56,7 @@ Route::middleware(['auth'])->group(function () {
     })->name('home');
 
     // Rutas para administradores
-    Route::prefix('admin')->middleware(['role:administrador'])->group(function () {
+     Route::prefix('admin')->middleware(['role:administrador'])->group(function () {
         // Dashboard
         Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
         
@@ -67,7 +67,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/doctores/{id}', [AdminController::class, 'doctoresShow'])->name('admin.doctores.show');
         Route::get('/doctores/{id}/edit', [AdminController::class, 'doctoresEdit'])->name('admin.doctores.edit');
         Route::put('/doctores/{id}', [AdminController::class, 'doctoresUpdate'])->name('admin.doctores.update');
+        
+        // RUTAS DE ELIMINACIÓN DE DOCTORES - CORREGIDAS
         Route::delete('/doctores/{id}', [AdminController::class, 'doctoresDestroy'])->name('admin.doctores.destroy');
+        Route::delete('/doctores/{id}/force-delete', [AdminController::class, 'doctoresForceDestroy'])->name('admin.doctores.force-destroy');
         
         // Logs del sistema
         Route::get('/logs', [AdminController::class, 'logs'])->name('admin.logs');
@@ -75,31 +78,42 @@ Route::middleware(['auth'])->group(function () {
         // Configuración del sistema
         Route::get('/configuracion', [AdminController::class, 'configuracion'])->name('admin.configuracion');
         Route::post('/configuracion', [AdminController::class, 'configuracionUpdate'])->name('admin.configuracion.update');
-        Route::post('/configuracion/reset', [AdminController::class, 'configuracionReset'])->name('admin.configuracion.reset'); // AGREGAR ESTA
+        Route::post('/configuracion/reset', [AdminController::class, 'configuracionReset'])->name('admin.configuracion.reset');
         
- // Ruta para cambiar email del administrador - NUEVA
-    Route::put('/cambiar-email', [AdminController::class, 'cambiarEmail'])
-        ->name('admin.cambiar-email.update');
+        // Ruta para cambiar email del administrador
+        Route::put('/cambiar-email', [AdminController::class, 'cambiarEmail'])
+            ->name('admin.cambiar-email.update');
 
-         // Ruta para cambiar contraseña del administrador (ya no necesitas mostrarCambiarPassword)
+        // Ruta para cambiar contraseña del administrador
         Route::put('/cambiar-password', [AdminController::class, 'cambiarPassword'])
-        ->name('admin.cambiar-password.update');
-    // Mantenimiento - AGREGAR ESTAS
-    Route::post('/cache/limpiar', [AdminController::class, 'limpiarCache'])->name('admin.cache.limpiar');
-    Route::post('/logs/purgar', [AdminController::class, 'purgarLogs'])->name('admin.logs.purgar');
+            ->name('admin.cambiar-password.update');
+            
+        // Mantenimiento
+        Route::post('/cache/limpiar', [AdminController::class, 'limpiarCache'])->name('admin.cache.limpiar');
+        Route::post('/logs/purgar', [AdminController::class, 'purgarLogs'])->name('admin.logs.purgar');
     });
 
-  // Rutas para doctores
-    Route::prefix('doctor')->middleware(['role:doctor'])->name('doctor.')->group(function () {
+     Route::prefix('doctor')->middleware(['role:doctor'])->name('doctor.')->group(function () {
         // Dashboard
         Route::get('/dashboard', [DoctorController::class, 'dashboard'])->name('dashboard');
         
-        // Gestión de pacientes
+        // Gestión de pacientes - TODAS LAS RUTAS DE PACIENTES JUNTAS
         Route::get('/pacientes', [DoctorController::class, 'pacientesIndex'])->name('pacientes.index');
         Route::get('/pacientes/create', [DoctorController::class, 'pacientesCreate'])->name('pacientes.create');
         Route::post('/pacientes', [DoctorController::class, 'pacientesStore'])->name('pacientes.store');
+        // NUEVAS RUTAS PARA ELIMINAR PACIENTES
+    Route::delete('/pacientes/{id}', [DoctorController::class, 'pacientesDestroy'])->name('pacientes.destroy');
+    Route::delete('/pacientes/{id}/force-delete', [DoctorController::class, 'pacientesForceDestroy'])->name('pacientes.force-destroy');
+    
+    Route::put('/pacientes/{id}/set-principal', [DoctorController::class, 'setPrincipal'])->name('pacientes.set-principal');
+        
+        // RUTAS ESPECÍFICAS DE BÚSQUEDA DE PACIENTES (ANTES DE LAS RUTAS CON PARÁMETROS)
         Route::get('/pacientes/buscar-cedula', [DoctorController::class, 'buscarPacientePorCedula'])
             ->name('pacientes.buscar-cedula');
+        Route::get('/pacientes/buscar-disponible', [DoctorController::class, 'buscarPacienteDisponible'])
+            ->name('pacientes.buscar-disponible');
+        
+        // RUTAS CON PARÁMETROS DE PACIENTES (AL FINAL)
         Route::get('/pacientes/{id}', [DoctorController::class, 'pacientesShow'])->name('pacientes.show');
         Route::get('/pacientes/{id}/edit', [DoctorController::class, 'pacientesEdit'])->name('pacientes.edit');
         Route::put('/pacientes/{id}', [DoctorController::class, 'pacientesUpdate'])->name('pacientes.update');
@@ -130,6 +144,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/perfil', [DoctorController::class, 'perfil'])->name('perfil');
         Route::put('/perfil', [DoctorController::class, 'perfilUpdate'])->name('perfil.update');
     });
+
     // Rutas para pacientes
     Route::prefix('paciente')->middleware(['role:paciente'])->group(function () {
         // Dashboard

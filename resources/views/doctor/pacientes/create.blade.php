@@ -224,60 +224,121 @@
                             </div>
                         </form>
                     </div>
-                    
-                    <!-- Formulario para seleccionar paciente existente -->
+                   <!-- Formulario mejorado para buscar y agregar paciente existente -->
                     <div class="tab-pane fade" id="existing-patient" role="tabpanel" aria-labelledby="existing-patient-tab">
-                        @if(count($pacientesDisponibles) > 0)
-                            <div class="alert alert-info mb-4">
-                                <i class="fas fa-info-circle me-2"></i>
-                                Seleccione un paciente existente para agregarlo a su lista de pacientes.
+                        <div class="alert alert-info mb-4">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Busque un paciente por su número de cédula para agregarlo a su lista de pacientes.
+                        </div>
+                        
+                        <!-- Buscador por cédula -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Buscar Paciente por Cédula</h6>
                             </div>
-                            
-                            <form action="{{ route('doctor.pacientes.store') }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="paciente_existente" value="1">
-                                
-                                <div class="form-group mb-4">
-                                    <label for="paciente_id" class="form-label">Seleccionar Paciente <span class="text-danger">*</span></label>
-                                    <select class="form-select @error('paciente_id') is-invalid @enderror" id="paciente_id" name="paciente_id" required>
-                                        <option value="">Seleccione un paciente...</option>
-                                        @foreach($pacientesDisponibles as $paciente)
-                                            <option value="{{ $paciente->id }}" {{ old('paciente_id') == $paciente->id ? 'selected' : '' }}>
-                                                {{ $paciente->user->nombre }} {{ $paciente->user->apellido }} ({{ $paciente->user->email }})
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                    @error('paciente_id')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-8">
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="fas fa-id-card"></i></span>
+                                            <input type="text" class="form-control" placeholder="Ingrese número de cédula..." id="searchCedulaExistente">
+                                            <button class="btn btn-primary" type="button" id="btnSearchPacienteExistente">
+                                                <i class="fas fa-search me-1"></i> Buscar
+                                            </button>
+                                        </div>
+                                        <small class="form-text text-muted">Ingrese el número de cédula del paciente que desea agregar.</small>
+                                    </div>
                                 </div>
                                 
-                                <div class="form-check mb-4">
-    <input class="form-check-input" type="checkbox" id="doctor_principal" name="doctor_principal" value="1" {{ old('doctor_principal') ? 'checked' : '' }}>
-    <label class="form-check-label" for="doctor_principal">
-        Establecer como médico principal
-    </label>
-    <small class="form-text text-muted d-block">
-        Si se marca esta opción, serás establecido como el médico principal del paciente.
-    </small>
-</div>
+                                <!-- Loader -->
+                                <div id="searchLoaderExistente" class="text-center py-3" style="display: none;">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Buscando...</span>
+                                    </div>
+                                    <p class="mt-2">Buscando paciente...</p>
+                                </div>
                                 
-                                <div class="form-group text-end">
-                                    <a href="{{ route('doctor.pacientes.index') }}" class="btn btn-secondary me-2">
+                                <!-- Mensaje cuando no se encuentra -->
+                                <div id="notFoundMessageExistente" class="alert alert-warning" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <span id="notFoundTextExistente">No se encontró ningún paciente con la cédula proporcionada.</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Información del paciente encontrado -->
+                        <div id="pacienteEncontradoContainer" style="display: none;">
+                            <div class="card mb-4">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="card-title mb-0"><i class="fas fa-user-check me-2"></i>Paciente Encontrado</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar avatar-lg me-3">
+                                                    <div class="avatar-initial rounded-circle bg-primary">
+                                                        <i class="fas fa-user"></i>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <h5 class="mb-1" id="pacienteEncontradoNombre"></h5>
+                                                    <p class="mb-1">
+                                                        <span class="badge bg-light text-dark" id="pacienteEncontradoCedula"></span>
+                                                    </p>
+                                                    <p class="mb-0 text-muted" id="pacienteEncontradoEmail"></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="text-md-end">
+                                                <p class="mb-1"><strong>Género:</strong> <span id="pacienteEncontradoGenero"></span></p>
+                                                <p class="mb-0"><strong>Edad:</strong> <span id="pacienteEncontradoEdad"></span> años</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Formulario para agregar paciente -->
+                            <form id="formAgregarPacienteExistente" action="{{ route('doctor.pacientes.store') }}" method="POST">
+                                @csrf
+                                <input type="hidden" name="paciente_existente" value="1">
+                                <input type="hidden" name="paciente_id" id="pacienteEncontradoId">
+                                
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="card-title mb-0">Configuración de Asignación</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" id="doctor_principal_existente" name="doctor_principal" value="1">
+                                            <label class="form-check-label" for="doctor_principal_existente">
+                                                <strong>Establecer como médico principal</strong>
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Si se marca esta opción, serás establecido como el médico principal del paciente.
+                                                Si el paciente ya tiene un médico principal, este será reemplazado.
+                                            </small>
+                                        </div>
+                                        
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Información:</strong> Este paciente será agregado a su lista de pacientes y podrá gestionar sus resultados médicos.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group text-end mt-4">
+                                    <button type="button" class="btn btn-secondary me-2" id="btnCancelarAgregar">
                                         <i class="fas fa-times me-1"></i> Cancelar
-                                    </a>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-user-plus me-1"></i> Agregar Paciente
+                                    </button>
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-user-plus me-1"></i> Agregar a Mis Pacientes
                                     </button>
                                 </div>
                             </form>
-                        @else
-                            <div class="alert alert-info text-center py-4">
-                                <i class="fas fa-info-circle fa-3x mb-3"></i>
-                                <h5>No hay pacientes disponibles para asignar</h5>
-                                <p class="mb-0">Todos los pacientes registrados ya están asignados a su lista. Puede crear un nuevo paciente usando la pestaña "Nuevo Paciente".</p>
-                            </div>
-                        @endif
+                        </div>
                     </div>
                 </div>
             </div>
@@ -286,9 +347,12 @@
 </div>
 @endsection
 
+
 @section('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // ===== FUNCIONALIDAD EXISTENTE =====
+        
         // Guardar la pestaña activa en localStorage
         const patientTabs = document.getElementById('patientTabs');
         const tabLinks = patientTabs.querySelectorAll('button[data-bs-toggle="tab"]');
@@ -419,6 +483,94 @@
             });
         }
         
+        // ===== NUEVA FUNCIONALIDAD: BÚSQUEDA DE PACIENTES EXISTENTES =====
+        
+        // Variables para la búsqueda de pacientes existentes
+        const searchCedulaExistente = document.getElementById('searchCedulaExistente');
+        const btnSearchPacienteExistente = document.getElementById('btnSearchPacienteExistente');
+        const searchLoaderExistente = document.getElementById('searchLoaderExistente');
+        const notFoundMessageExistente = document.getElementById('notFoundMessageExistente');
+        const notFoundTextExistente = document.getElementById('notFoundTextExistente');
+        const pacienteEncontradoContainer = document.getElementById('pacienteEncontradoContainer');
+        const btnCancelarAgregar = document.getElementById('btnCancelarAgregar');
+        
+        // Elementos para mostrar información del paciente
+        const pacienteEncontradoNombre = document.getElementById('pacienteEncontradoNombre');
+        const pacienteEncontradoCedula = document.getElementById('pacienteEncontradoCedula');
+        const pacienteEncontradoEmail = document.getElementById('pacienteEncontradoEmail');
+        const pacienteEncontradoGenero = document.getElementById('pacienteEncontradoGenero');
+        const pacienteEncontradoEdad = document.getElementById('pacienteEncontradoEdad');
+        const pacienteEncontradoId = document.getElementById('pacienteEncontradoId');
+        
+        // Función para buscar paciente existente por cédula
+        function buscarPacienteExistente() {
+            const cedula = searchCedulaExistente.value.trim();
+            
+            if (!cedula) {
+                alert('Por favor ingrese un número de cédula para buscar.');
+                return;
+            }
+            
+            // Mostrar loader y ocultar otros elementos
+            searchLoaderExistente.style.display = 'block';
+            notFoundMessageExistente.style.display = 'none';
+            pacienteEncontradoContainer.style.display = 'none';
+            
+            // Realizar la petición AJAX para buscar pacientes disponibles
+            fetch(`/doctor/pacientes/buscar-disponible?cedula=${cedula}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Ocultar loader
+                    searchLoaderExistente.style.display = 'none';
+                    
+                    if (data.success) {
+                        // Mostrar información del paciente encontrado
+                        pacienteEncontradoNombre.textContent = data.paciente.nombre_completo;
+                        pacienteEncontradoCedula.textContent = 'Cédula: ' + data.paciente.cedula;
+                        pacienteEncontradoEmail.textContent = data.paciente.email;
+                        pacienteEncontradoGenero.textContent = data.paciente.genero;
+                        pacienteEncontradoEdad.textContent = data.paciente.edad;
+                        pacienteEncontradoId.value = data.paciente.id;
+                        
+                        pacienteEncontradoContainer.style.display = 'block';
+                    } else {
+                        // No se encontró el paciente o ya está asignado
+                        notFoundTextExistente.textContent = data.message;
+                        notFoundMessageExistente.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    searchLoaderExistente.style.display = 'none';
+                    notFoundTextExistente.textContent = 'Ocurrió un error al buscar. Por favor intente nuevamente.';
+                    notFoundMessageExistente.style.display = 'block';
+                });
+        }
+        
+        // Event listeners para búsqueda de pacientes existentes
+        if (btnSearchPacienteExistente) {
+            btnSearchPacienteExistente.addEventListener('click', buscarPacienteExistente);
+        }
+        
+        if (searchCedulaExistente) {
+            searchCedulaExistente.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    buscarPacienteExistente();
+                }
+            });
+        }
+        
+        if (btnCancelarAgregar) {
+            btnCancelarAgregar.addEventListener('click', function() {
+                pacienteEncontradoContainer.style.display = 'none';
+                searchCedulaExistente.value = '';
+                notFoundMessageExistente.style.display = 'none';
+            });
+        }
+        
+        // ===== FUNCIONES AUXILIARES =====
+        
         // Función para generar contraseña aleatoria
         function generateRandomPassword(length) {
             // Caracteres para generar contraseñas seguras
@@ -459,12 +611,64 @@
             }, 50);
         }
         
+        // ===== MEJORAS ADICIONALES =====
+        
         // Mejorar el selector de pacientes con Select2 si está disponible
         if (typeof $.fn.select2 !== 'undefined') {
             $('#paciente_id').select2({
                 placeholder: 'Buscar paciente...',
                 allowClear: true,
                 width: '100%'
+            });
+        }
+        
+        // Limpiar campos de búsqueda al cambiar de pestaña
+        tabLinks.forEach(tabLink => {
+            tabLink.addEventListener('shown.bs.tab', function(e) {
+                // Si se cambia a la pestaña de paciente existente, limpiar formulario
+                if (e.target.dataset.bsTarget === '#existing-patient') {
+                    if (searchCedulaExistente) {
+                        searchCedulaExistente.value = '';
+                    }
+                    if (pacienteEncontradoContainer) {
+                        pacienteEncontradoContainer.style.display = 'none';
+                    }
+                    if (notFoundMessageExistente) {
+                        notFoundMessageExistente.style.display = 'none';
+                    }
+                }
+            });
+        });
+        
+        // Validación adicional para el formulario de agregar paciente existente
+        const formAgregarPacienteExistente = document.getElementById('formAgregarPacienteExistente');
+        if (formAgregarPacienteExistente) {
+            formAgregarPacienteExistente.addEventListener('submit', function(e) {
+                const pacienteId = document.getElementById('pacienteEncontradoId').value;
+                
+                if (!pacienteId) {
+                    e.preventDefault();
+                    alert('Error: No se ha seleccionado ningún paciente. Por favor, busque y seleccione un paciente primero.');
+                    return false;
+                }
+                
+                // Mostrar confirmación antes de enviar
+                if (!confirm('¿Está seguro que desea agregar este paciente a su lista?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        }
+        
+        // Auto-focus en el campo de búsqueda cuando se activa la pestaña
+        const existingPatientTab = document.getElementById('existing-patient-tab');
+        if (existingPatientTab) {
+            existingPatientTab.addEventListener('shown.bs.tab', function() {
+                if (searchCedulaExistente) {
+                    setTimeout(() => {
+                        searchCedulaExistente.focus();
+                    }, 100);
+                }
             });
         }
     });

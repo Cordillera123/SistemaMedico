@@ -112,7 +112,68 @@ public function pacientesIndex(Request $request)
 {
     return view('doctor.resultados.buscar-cedula');
 }
+    /**
+ * Buscar paciente disponible por cédula (que no esté asignado al doctor)
+ */
+public function buscarPacienteDisponible(Request $request)
+{
+    $cedula = $request->cedula;
     
+    if (empty($cedula)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Debe proporcionar una cédula para buscar'
+        ]);
+    }
+    
+    $doctor = Auth::user()->doctor;
+    
+    // Buscar paciente por cédula en AMBAS tablas (users Y pacientes)
+    $paciente = Paciente::where(function($query) use ($cedula) {
+        // Buscar en la tabla pacientes
+        $query->where('cedula', $cedula)
+              // O buscar en la tabla users
+              ->orWhereHas('user', function($subQuery) use ($cedula) {
+                  $subQuery->where('cedula', $cedula);
+              });
+    })->with('user')->first();
+    
+    if (!$paciente) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No se encontró ningún paciente con esa cédula en el sistema'
+        ]);
+    }
+    
+    // Verificar si el paciente ya está asignado a este doctor
+    $yaAsignado = $doctor->pacientes()
+        ->where('pacientes.id', $paciente->id)
+        ->exists();
+    
+    if ($yaAsignado) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Este paciente ya está asignado a su lista de pacientes'
+        ]);
+    }
+    
+    // Obtener la cédula desde donde esté disponible
+    $cedulaPaciente = $paciente->cedula ?? $paciente->user->cedula ?? 'No disponible';
+    
+    return response()->json([
+        'success' => true,
+        'paciente' => [
+            'id' => $paciente->id,
+            'nombre' => $paciente->user->nombre,
+            'apellido' => $paciente->user->apellido,
+            'nombre_completo' => $paciente->user->nombre_completo,
+            'cedula' => $cedulaPaciente, // CORREGIDO: obtener desde donde esté disponible
+            'email' => $paciente->user->email,
+            'edad' => $paciente->edad,
+            'genero' => $paciente->genero
+        ]
+    ]);
+}
     // Buscar paciente por cédula (para API)
     public function buscarPacientePorCedula(Request $request)
     {
@@ -245,21 +306,36 @@ public function pacientesStore(Request $request)
                 ->withInput();
         }
     } else {
-        // Crear un nuevo paciente
+        // VALIDACIONES PARA NUEVO PACIENTE (SOLO TABLA PACIENTES PARA CÉDULA)
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:255',
             'apellido' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'username' => 'required|string|max:255|unique:users',
+            'email' => 'required|string|email|max:255|unique:users,email',
+            'username' => 'required|string|max:255|unique:users,username',
             'password' => 'required|string|min:8|confirmed',
             'telefono' => 'nullable|string|max:20',
             'direccion' => 'nullable|string|max:255',
-            'cedula' => 'required|string|max:20',
-            'fecha_nacimiento' => 'required|date',
-            'genero' => 'required|string|max:20',
-            'tipo_sangre' => 'nullable|string|max:10',
-            'alergias' => 'nullable|string',
-            'antecedentes_medicos' => 'nullable|string',
+            'cedula' => [
+                'required',
+                'string',
+                'max:20',
+                'unique:pacientes,cedula', // SOLO verificar en tabla pacientes
+                'regex:/^[0-9]{10}$/' // Opcional: validar formato de cédula ecuatoriana
+            ],
+            'fecha_nacimiento' => 'required|date|before:today',
+            'genero' => 'required|string|in:Masculino,Femenino,Otro',
+            'tipo_sangre' => 'nullable|string|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
+            'alergias' => 'nullable|string|max:1000',
+            'antecedentes_medicos' => 'nullable|string|max:2000',
+        ], [
+            // Mensajes personalizados
+            'cedula.unique' => 'Ya existe un paciente registrado con esta cédula.',
+            'cedula.regex' => 'La cédula debe tener exactamente 10 dígitos.',
+            'email.unique' => 'Ya existe un usuario registrado con este correo electrónico.',
+            'username.unique' => 'Ya existe un usuario registrado con este nombre de usuario.',
+            'fecha_nacimiento.before' => 'La fecha de nacimiento debe ser anterior a hoy.',
+            'genero.in' => 'El género seleccionado no es válido.',
+            'tipo_sangre.in' => 'El tipo de sangre seleccionado no es válido.',
         ]);
 
         if ($validator->fails()) {
@@ -278,8 +354,34 @@ public function pacientesStore(Request $request)
                 throw new \Exception('No se encontró el rol de paciente');
             }
 
-            // Crear usuario
-            $user = User::create([
+            // VALIDACIÓN ADICIONAL: Doble verificación antes de crear
+            $emailExiste = User::where('email', $request->email)->exists();
+            $usernameExiste = User::where('username', $request->username)->exists();
+            $cedulaExiste = Paciente::where('cedula', $request->cedula)->exists();
+            
+            if ($emailExiste) {
+                DB::rollBack();
+                return redirect()->back()
+                    ->withErrors(['email' => 'El correo electrónico ya está registrado en el sistema.'])
+                    ->withInput();
+            }
+            
+            if ($usernameExiste) {
+                DB::rollBack();
+                return redirect()->back()
+                    ->withErrors(['username' => 'El nombre de usuario ya está registrado en el sistema.'])
+                    ->withInput();
+            }
+            
+            if ($cedulaExiste) {
+                DB::rollBack();
+                return redirect()->back()
+                    ->withErrors(['cedula' => 'La cédula ya está registrada en el sistema.'])
+                    ->withInput();
+            }
+
+            // Crear usuario SIN cédula (ya que la manejas solo en pacientes)
+            $newUser = User::create([
                 'nombre' => $request->nombre,
                 'apellido' => $request->apellido,
                 'email' => $request->email,
@@ -291,9 +393,9 @@ public function pacientesStore(Request $request)
                 'activo' => true,
             ]);
 
-            // Crear paciente
+            // Crear paciente CON cédula
             $paciente = Paciente::create([
-                'user_id' => $user->id,
+                'user_id' => $newUser->id,
                 'cedula' => $request->cedula,
                 'fecha_nacimiento' => $request->fecha_nacimiento,
                 'genero' => $request->genero,
@@ -302,7 +404,7 @@ public function pacientesStore(Request $request)
                 'antecedentes_medicos' => $request->antecedentes_medicos,
             ]);
 
-            // CAMBIO AQUÍ: Ahora verificamos si el checkbox está marcado
+            // Verificar si el checkbox está marcado
             $esDoctorPrincipal = $request->has('doctor_principal');
             
             // Crear la relación doctor-paciente con el valor del checkbox
@@ -315,13 +417,13 @@ public function pacientesStore(Request $request)
                 'Creación de paciente', 
                 'pacientes', 
                 $paciente->id,
-                "Paciente {$user->nombre} {$user->apellido} creado por el doctor {$doctor->user->nombre} {$doctor->user->apellido}"
+                "Paciente {$newUser->nombre} {$newUser->apellido} (Cédula: {$request->cedula}) creado por el doctor {$doctor->user->nombre} {$doctor->user->apellido}"
             );
 
             DB::commit();
 
             return redirect()->route('doctor.pacientes.index')
-                ->with('success', 'Paciente creado exitosamente');
+                ->with('success', "Paciente {$newUser->nombre} {$newUser->apellido} creado exitosamente");
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect()->back()
@@ -475,6 +577,108 @@ public function setPrincipal($id)
     }
 }
 
+/**
+ * Eliminar paciente de la lista del doctor (desasignar)
+ */
+
+public function pacientesDestroy($id)
+{
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
+    $doctor = $user->doctor;
+    
+    // Verificar que el paciente esté asignado a este doctor
+    $paciente = $doctor->pacientes()
+        ->where('pacientes.id', $id)
+        ->with('user')
+        ->firstOrFail();
+    
+    DB::beginTransaction();
+    
+    try {
+        // ELIMINADO: Ya no verificamos si hay resultados, simplemente desasignamos
+        // La verificación de resultados se hace solo en el frontend para informar al usuario
+        
+        // Desasignar el paciente del doctor (eliminar la relación)
+        $doctor->pacientes()->detach($paciente->id);
+        
+        // Registrar acción
+        LogSistema::registrar(
+            'Eliminación de paciente de lista', 
+            'pacientes', 
+            $paciente->id,
+            "Paciente {$paciente->user->nombre} {$paciente->user->apellido} eliminado de la lista del doctor {$doctor->user->nombre} {$doctor->user->apellido} (manteniendo resultados médicos)"
+        );
+        
+        DB::commit();
+        
+        return redirect()->route('doctor.pacientes.index')
+            ->with('success', "Paciente {$paciente->user->nombre} {$paciente->user->apellido} eliminado de su lista exitosamente. Los resultados médicos se mantienen en el sistema.");
+            
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->withErrors(['general' => 'Error al eliminar paciente: ' . $e->getMessage()]);
+    }
+}
+
+/**
+ * Forzar eliminación de paciente y sus resultados SOLO DE ESTE DOCTOR
+ */
+public function pacientesForceDestroy($id)
+{
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
+    $doctor = $user->doctor;
+    
+    // Verificar que el paciente esté asignado a este doctor
+    $paciente = $doctor->pacientes()
+        ->where('pacientes.id', $id)
+        ->with('user')
+        ->firstOrFail();
+    
+    DB::beginTransaction();
+    
+    try {
+        // IMPORTANTE: Solo eliminar resultados de ESTE doctor, no todos los resultados del paciente
+        $resultados = ResultadoMedico::where('paciente_id', $paciente->id)
+            ->where('doctor_id', $doctor->id) // SOLO los resultados de este doctor
+            ->get();
+        
+        $cantidadResultados = $resultados->count();
+        
+        foreach ($resultados as $resultado) {
+            // Eliminar archivo físico
+            if ($resultado->archivo_pdf && Storage::disk('public')->exists($resultado->archivo_pdf)) {
+                Storage::disk('public')->delete($resultado->archivo_pdf);
+            }
+            
+            // Eliminar registro (soft delete si está configurado)
+            $resultado->delete();
+        }
+        
+        // Desasignar el paciente del doctor
+        $doctor->pacientes()->detach($paciente->id);
+        
+        // Registrar acción
+        LogSistema::registrar(
+            'Eliminación completa de paciente y resultados del doctor', 
+            'pacientes', 
+            $paciente->id,
+            "Paciente {$paciente->user->nombre} {$paciente->user->apellido} y {$cantidadResultados} resultado(s) médico(s) eliminados de la lista del doctor {$doctor->user->nombre} {$doctor->user->apellido}"
+        );
+        
+        DB::commit();
+        
+        return redirect()->route('doctor.pacientes.index')
+            ->with('success', "Paciente {$paciente->user->nombre} {$paciente->user->apellido} y {$cantidadResultados} resultado(s) médico(s) eliminados exitosamente de su lista.");
+            
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->withErrors(['general' => 'Error al eliminar paciente y resultados: ' . $e->getMessage()]);
+    }
+}
     /**
      * Resultados médicos
      */

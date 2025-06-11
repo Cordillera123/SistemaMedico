@@ -26,35 +26,47 @@ class PacienteController extends BaseController
     }
 
     /**
-     * Dashboard del paciente - CORREGIDO
+     * Dashboard del paciente - CORREGIDO PARA MANEJAR CASOS SIN DOCTORES
      */
     public function dashboard()
     {
         $user = Auth::user();
+        
+        // CORRECCIÓN: Verificar que el paciente existe, si no, redirigir con mensaje específico
         $paciente = $user->paciente;
         
-        // Verificar que el paciente existe
         if (!$paciente) {
-            return redirect()->route('login')->with('error', 'No se encontró información del paciente.');
+            // El usuario tiene rol de paciente pero no tiene registro en la tabla pacientes
+            Auth::logout();
+            return redirect()->route('login')->with('error', 'Error de configuración: Usuario sin perfil de paciente. Contacte al administrador.');
         }
 
-        // Estadísticas para el dashboard
-        $totalResultados = $paciente->resultadosMedicos()->count();
-        $resultadosNoVistos = $paciente->resultadosNoVistos()->count();
+        // CORRECCIÓN: Obtener estadísticas básicas sin requerir doctores
+        $totalResultados = ResultadoMedico::where('paciente_id', $paciente->id)->count();
+        $resultadosNoVistos = ResultadoMedico::where('paciente_id', $paciente->id)
+            ->where('visto_por_paciente', false)
+            ->count();
 
-        // Resultados recientes
-        $resultadosRecientes = $paciente->resultadosMedicos()
+        // CORRECCIÓN: Resultados recientes de TODOS los doctores (incluso los desasignados)
+        $resultadosRecientes = ResultadoMedico::where('paciente_id', $paciente->id)
             ->with(['doctor.user', 'tipoResultado'])
             ->latest()
             ->take(5)
             ->get();
 
-        // CAMBIO: Obtener el doctor principal del paciente
-        $doctorPrincipal = $paciente->doctorPrincipal();
-        
-        // Obtener todos los doctores del paciente
-        $doctores = $paciente->doctores()->with('user')->get();
-        $totalDoctores = $doctores->count();
+        // CORRECCIÓN: Manejar el caso donde no hay doctores asignados
+        $doctorPrincipal = null;
+        $doctores = collect(); // Colección vacía
+        $totalDoctores = 0;
+
+        // Solo buscar doctores si existen relaciones
+        if ($paciente->doctores()->exists()) {
+            $doctores = $paciente->doctores()->with('user')->get();
+            $totalDoctores = $doctores->count();
+            
+            // Buscar doctor principal solo si hay doctores
+            $doctorPrincipal = $paciente->doctorPrincipal();
+        }
 
         // Notificaciones no leídas
         $notificaciones = Notificacion::where('user_id', $user->id)
@@ -76,13 +88,20 @@ class PacienteController extends BaseController
     }
 
     /**
-     * Mostrar lista de resultados médicos del paciente
+     * Mostrar lista de resultados médicos del paciente - CORREGIDO
      */
     public function resultadosIndex(Request $request)
     {
-        $paciente = Auth::user()->paciente;
+        $user = Auth::user();
+        $paciente = $user->paciente;
         
-        $query = $paciente->resultadosMedicos()
+        // CORRECCIÓN: Verificar paciente existe
+        if (!$paciente) {
+            return redirect()->route('login')->with('error', 'Error de configuración: Usuario sin perfil de paciente.');
+        }
+        
+        // CORRECCIÓN: Buscar resultados directamente por paciente_id, no por relación con doctores
+        $query = ResultadoMedico::where('paciente_id', $paciente->id)
             ->with(['doctor.user', 'tipoResultado']);
         
         // Filtrar solo resultados nuevos si se solicita
@@ -96,11 +115,18 @@ class PacienteController extends BaseController
     }
 
     /**
-     * Mostrar un resultado médico específico
+     * Mostrar un resultado médico específico - CORREGIDO
      */
     public function resultadosShow($id)
     {
-        $paciente = Auth::user()->paciente;
+        $user = Auth::user();
+        $paciente = $user->paciente;
+        
+        if (!$paciente) {
+            return redirect()->route('login')->with('error', 'Error de configuración: Usuario sin perfil de paciente.');
+        }
+
+        // CORRECCIÓN: Buscar resultado directamente por paciente_id
         $resultado = ResultadoMedico::where('paciente_id', $paciente->id)
             ->with(['doctor.user', 'tipoResultado'])
             ->findOrFail($id);
@@ -122,11 +148,18 @@ class PacienteController extends BaseController
     }
 
     /**
-     * Descargar archivo PDF de un resultado médico
+     * Descargar archivo PDF de un resultado médico - CORREGIDO
      */
     public function resultadosDescargar($id)
     {
-        $paciente = Auth::user()->paciente;
+        $user = Auth::user();
+        $paciente = $user->paciente;
+        
+        if (!$paciente) {
+            abort(403, 'Error de configuración: Usuario sin perfil de paciente.');
+        }
+
+        // CORRECCIÓN: Buscar resultado directamente por paciente_id
         $resultado = ResultadoMedico::where('paciente_id', $paciente->id)
             ->findOrFail($id);
 
@@ -150,18 +183,43 @@ class PacienteController extends BaseController
     }
 
     /**
-     * Mostrar información de los médicos del paciente - CORREGIDO
+     * Mostrar información de los médicos del paciente - CORREGIDO PARA CASOS SIN DOCTORES
      */
     public function miMedico()
     {
-        $paciente = Auth::user()->paciente;
+        $user = Auth::user();
+        $paciente = $user->paciente;
         
-        // Obtener todos los doctores
+        if (!$paciente) {
+            return redirect()->route('login')->with('error', 'Error de configuración: Usuario sin perfil de paciente.');
+        }
+        
+        // CORRECCIÓN: Obtener todos los doctores (puede ser cero)
         $doctores = $paciente->doctores()->with('user')->get();
         
-        // Si no tiene ningún doctor asignado
+        // CORRECCIÓN: Si no tiene ningún doctor asignado, mostrar vista especial
         if ($doctores->count() == 0) {
-            return view('paciente.sin-medico');
+            // Aún así, mostrar estadísticas de resultados históricos
+            $totalResultados = ResultadoMedico::where('paciente_id', $paciente->id)->count();
+            $resultadosVistos = ResultadoMedico::where('paciente_id', $paciente->id)
+                ->where('visto_por_paciente', true)
+                ->count();
+            $resultadosNoVistos = $totalResultados - $resultadosVistos;
+            
+            // Resultados históricos de doctores que ya no están asignados
+            $resultadosRecientes = ResultadoMedico::where('paciente_id', $paciente->id)
+                ->with(['tipoResultado', 'doctor.user'])
+                ->latest()
+                ->take(5)
+                ->get();
+
+            return view('paciente.sin-medico', compact(
+                'paciente',
+                'totalResultados',
+                'resultadosVistos',
+                'resultadosNoVistos',
+                'resultadosRecientes'
+            ));
         }
         
         // Obtener el doctor principal
@@ -170,28 +228,28 @@ class PacienteController extends BaseController
         // Si no tiene doctor principal pero tiene doctores, usar el primero como referencia
         $doctorReferencia = $doctorPrincipal ?: $doctores->first();
 
-        // Estadísticas generales (todos los médicos)
-        $totalResultados = $paciente->resultadosMedicos()->count();
-        $resultadosVistos = $paciente->resultadosMedicos()
+        // Estadísticas generales (todos los médicos + históricos)
+        $totalResultados = ResultadoMedico::where('paciente_id', $paciente->id)->count();
+        $resultadosVistos = ResultadoMedico::where('paciente_id', $paciente->id)
             ->where('visto_por_paciente', true)
             ->count();
         $resultadosNoVistos = $totalResultados - $resultadosVistos;
         
-        // Resultados recientes de todos los médicos
-        $resultadosRecientes = $paciente->resultadosMedicos()
+        // Resultados recientes de todos los médicos (actuales + históricos)
+        $resultadosRecientes = ResultadoMedico::where('paciente_id', $paciente->id)
             ->with(['tipoResultado', 'doctor.user'])
             ->latest()
             ->take(5)
             ->get();
 
-        // Estadísticas por cada doctor
+        // Estadísticas por cada doctor actual
         $estadisticasPorDoctor = [];
         foreach ($doctores as $doctor) {
             $estadisticasPorDoctor[$doctor->id] = [
-                'total_resultados' => $paciente->resultadosMedicos()
+                'total_resultados' => ResultadoMedico::where('paciente_id', $paciente->id)
                     ->where('doctor_id', $doctor->id)
                     ->count(),
-                'resultados_nuevos' => $paciente->resultadosMedicos()
+                'resultados_nuevos' => ResultadoMedico::where('paciente_id', $paciente->id)
                     ->where('doctor_id', $doctor->id)
                     ->where('visto_por_paciente', false)
                     ->count(),
@@ -211,11 +269,17 @@ class PacienteController extends BaseController
     }
     
     /**
-     * Mostrar todos los médicos del paciente
+     * Mostrar todos los médicos del paciente - CORREGIDO
      */
     public function misMedicos()
     {
-        $paciente = Auth::user()->paciente;
+        $user = Auth::user();
+        $paciente = $user->paciente;
+        
+        if (!$paciente) {
+            return redirect()->route('login')->with('error', 'Error de configuración: Usuario sin perfil de paciente.');
+        }
+
         $doctores = $paciente->doctores()->with('user')->get();
         $doctorPrincipal = $paciente->doctorPrincipal();
         
@@ -223,10 +287,10 @@ class PacienteController extends BaseController
         $estadisticasPorDoctor = [];
         foreach ($doctores as $doctor) {
             $estadisticasPorDoctor[$doctor->id] = [
-                'total_resultados' => $paciente->resultadosMedicos()
+                'total_resultados' => ResultadoMedico::where('paciente_id', $paciente->id)
                     ->where('doctor_id', $doctor->id)
                     ->count(),
-                'resultados_nuevos' => $paciente->resultadosMedicos()
+                'resultados_nuevos' => ResultadoMedico::where('paciente_id', $paciente->id)
                     ->where('doctor_id', $doctor->id)
                     ->where('visto_por_paciente', false)
                     ->count(),
@@ -239,6 +303,8 @@ class PacienteController extends BaseController
             'estadisticasPorDoctor'
         ));
     }
+
+    
 
     /**
      * Mostrar notificaciones del paciente
@@ -265,9 +331,24 @@ class PacienteController extends BaseController
      */
     public function perfil()
     {
-        $paciente = Auth::user()->paciente;
+        $user = Auth::user();
+        $paciente = $user->paciente;
+        
+        if (!$paciente) {
+            return redirect()->route('login')->with('error', 'Error de configuración: Usuario sin perfil de paciente.');
+        }
+
         return view('paciente.perfil', compact('paciente'));
     }
+
+    /**
+     * Actualizar perfil del paciente
+     */
+   
+
+    
+    
+
 
     /**
      * Actualizar perfil del paciente

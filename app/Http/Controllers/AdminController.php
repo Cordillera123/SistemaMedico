@@ -163,124 +163,186 @@ class AdminController extends BaseController
     /**
      * Actualizar doctor
      */
-    public function doctoresUpdate(Request $request, $id)
-    {
-        $doctor = Doctor::findOrFail($id);
-        $user = $doctor->user;
+ 
+public function doctoresUpdate(Request $request, $id)
+{
+    $doctor = Doctor::findOrFail($id);
+    $user = $doctor->user;
 
-        $validator = Validator::make($request->all(), [
-            'nombre' => 'required|string|max:255',
-            'apellido' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
-            'username' => 'required|string|max:255|unique:users,username,' . $user->id,
-            'telefono' => 'nullable|string|max:20',
-            'direccion' => 'nullable|string|max:255',
-            'especialidad' => 'required|string|max:255',
-            'licencia_medica' => 'required|string|max:255|unique:doctores,licencia_medica,' . $doctor->id,
-            'biografia' => 'nullable|string',
-            'horario_consulta' => 'nullable|string|max:255',
-            'activo' => 'boolean',
+    $validator = Validator::make($request->all(), [
+        'nombre' => 'required|string|max:255',
+        'apellido' => 'required|string|max:255',
+        'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+        'username' => 'required|string|max:255|unique:users,username,' . $user->id,
+        'telefono' => 'nullable|string|max:20',
+        'direccion' => 'nullable|string|max:255',
+        'especialidad' => 'required|string|max:255',
+        'licencia_medica' => 'required|string|max:255|unique:doctores,licencia_medica,' . $doctor->id,
+        'biografia' => 'nullable|string',
+        'horario_consulta' => 'nullable|string|max:255',
+        'activo' => 'nullable|in:0,1', // Permitir 0, 1 o null
+    ]);
+
+    if ($validator->fails()) {
+        return redirect()->back()
+            ->withErrors($validator)
+            ->withInput();
+    }
+
+    DB::beginTransaction();
+
+    try {
+        // Convertir el valor del checkbox a boolean
+        $activo = $request->input('activo', 0) == 1;
+        
+        // Actualizar usuario
+        $user->update([
+            'nombre' => $request->nombre,
+            'apellido' => $request->apellido,
+            'email' => $request->email,
+            'username' => $request->username,
+            'telefono' => $request->telefono,
+            'direccion' => $request->direccion,
+            'activo' => $activo,
         ]);
 
-        if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
-        }
+        // Actualizar doctor
+        $doctor->update([
+            'especialidad' => $request->especialidad,
+            'licencia_medica' => $request->licencia_medica,
+            'biografia' => $request->biografia,
+            'horario_consulta' => $request->horario_consulta,
+        ]);
 
-        DB::beginTransaction();
-
-        try {
-            // Actualizar usuario
-            $user->update([
-                'nombre' => $request->nombre,
-                'apellido' => $request->apellido,
-                'email' => $request->email,
-                'username' => $request->username,
-                'telefono' => $request->telefono,
-                'direccion' => $request->direccion,
-                'activo' => $request->has('activo'),
+        // Cambiar contraseña si se proporcionó una nueva
+        if ($request->filled('password')) {
+            $validator = Validator::make($request->all(), [
+                'password' => 'string|min:8|confirmed',
             ]);
 
-            // Actualizar doctor
-            $doctor->update([
-                'especialidad' => $request->especialidad,
-                'licencia_medica' => $request->licencia_medica,
-                'biografia' => $request->biografia,
-                'horario_consulta' => $request->horario_consulta,
-            ]);
-
-            // Cambiar contraseña si se proporcionó una nueva
-            if ($request->filled('password')) {
-                $validator = Validator::make($request->all(), [
-                    'password' => 'string|min:8|confirmed',
-                ]);
-
-                if ($validator->fails()) {
-                    DB::rollBack();
-                    return redirect()->back()
-                        ->withErrors($validator)
-                        ->withInput();
-                }
-
-                $user->update([
-                    'password' => Hash::make($request->password),
-                ]);
+            if ($validator->fails()) {
+                DB::rollBack();
+                return redirect()->back()
+                    ->withErrors($validator)
+                    ->withInput();
             }
 
-            // Registrar acción
-            LogSistema::registrar(
-                'Actualización de doctor', 
-                'doctores', 
-                $doctor->id,
-                "Doctor {$user->nombre} {$user->apellido} actualizado"
-            );
-
-            DB::commit();
-
-            return redirect()->route('admin.doctores.index')
-                ->with('success', 'Doctor actualizado exitosamente');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()
-                ->withErrors(['general' => 'Error al actualizar doctor: ' . $e->getMessage()])
-                ->withInput();
+            $user->update([
+                'password' => Hash::make($request->password),
+            ]);
         }
+
+        // Registrar acción
+        LogSistema::registrar(
+            'Actualización de doctor', 
+            'doctores', 
+            $doctor->id,
+            "Doctor {$user->nombre} {$user->apellido} actualizado"
+        );
+
+        DB::commit();
+
+        return redirect()->route('admin.doctores.index')
+            ->with('success', 'Doctor actualizado exitosamente');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->withErrors(['general' => 'Error al actualizar doctor: ' . $e->getMessage()])
+            ->withInput();
     }
+}
 
     /**
-     * Eliminar doctor
-     */
-    public function doctoresDestroy($id)
-    {
-        $doctor = Doctor::findOrFail($id);
-        $user = $doctor->user;
+ * Eliminar solo el doctor (desasignar de pacientes, mantener resultados)
+ */
+public function doctoresDestroy($id)
+{
+    $doctor = Doctor::with('user')->findOrFail($id);
+    $user = $doctor->user;
 
-        DB::beginTransaction();
+    DB::beginTransaction();
 
-        try {
-            // Registrar acción antes de eliminar
-            LogSistema::registrar(
-                'Eliminación de doctor', 
-                'doctores', 
-                $doctor->id,
-                "Doctor {$user->nombre} {$user->apellido} eliminado"
-            );
+    try {
+        // Contar cuántos resultados médicos tiene este doctor
+        $totalResultados = \App\Models\ResultadoMedico::where('doctor_id', $doctor->id)->count();
+        
+        // Desasignar el doctor de todos sus pacientes (eliminar relaciones)
+        $doctor->pacientes()->detach();
+        
+        // Registrar acción antes de eliminar
+        LogSistema::registrar(
+            'Eliminación de doctor', 
+            'doctores', 
+            $doctor->id,
+            "Doctor {$user->nombre} {$user->apellido} eliminado (manteniendo {$totalResultados} resultados médicos)"
+        );
 
-            // Eliminar doctor (soft delete)
-            $doctor->delete();
-            $user->delete();
+        // Eliminar doctor y usuario (soft delete)
+        $doctor->delete();
+        $user->delete();
 
-            DB::commit();
+        DB::commit();
 
-            return redirect()->route('admin.doctores.index')
-                ->with('success', 'Doctor eliminado exitosamente');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()
-                ->withErrors(['general' => 'Error al eliminar doctor: ' . $e->getMessage()]);
-        }
+        return redirect()->route('admin.doctores.index')
+            ->with('success', "Doctor {$user->nombre} {$user->apellido} eliminado exitosamente. Sus {$totalResultados} resultados médicos se mantienen en el sistema.");
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->withErrors(['general' => 'Error al eliminar doctor: ' . $e->getMessage()]);
     }
+}
+
+/**
+ * Eliminar doctor y todos sus resultados médicos
+ */
+public function doctoresForceDestroy($id)
+{
+    $doctor = Doctor::with('user')->findOrFail($id);
+    $user = $doctor->user;
+
+    DB::beginTransaction();
+
+    try {
+        // Obtener todos los resultados médicos del doctor
+        $resultados = \App\Models\ResultadoMedico::where('doctor_id', $doctor->id)->get();
+        $cantidadResultados = $resultados->count();
+        
+        // Eliminar archivos físicos y registros de resultados
+        foreach ($resultados as $resultado) {
+            // Eliminar archivo PDF físico
+            if ($resultado->archivo_pdf && \Illuminate\Support\Facades\Storage::disk('public')->exists($resultado->archivo_pdf)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($resultado->archivo_pdf);
+            }
+            
+            // Eliminar registro de resultado médico
+            $resultado->delete();
+        }
+        
+        // Desasignar el doctor de todos sus pacientes
+        $doctor->pacientes()->detach();
+        
+        // Registrar acción antes de eliminar
+        LogSistema::registrar(
+            'Eliminación completa de doctor y resultados', 
+            'doctores', 
+            $doctor->id,
+            "Doctor {$user->nombre} {$user->apellido} y {$cantidadResultados} resultados médicos eliminados permanentemente"
+        );
+
+        // Eliminar doctor y usuario
+        $doctor->delete();
+        $user->delete();
+
+        DB::commit();
+
+        return redirect()->route('admin.doctores.index')
+            ->with('success', "Doctor {$user->nombre} {$user->apellido} y {$cantidadResultados} resultados médicos eliminados exitosamente.");
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()
+            ->withErrors(['general' => 'Error al eliminar doctor y resultados: ' . $e->getMessage()]);
+    }
+}
 
     /**
      * Mostrar logs del sistema
