@@ -528,6 +528,7 @@
 </div>
 
 <!-- Modal para purgar logs -->
+<!-- Modal para purgar logs -->
 <div class="modal fade" id="purgeLogsModal" tabindex="-1" aria-labelledby="purgeLogsModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <form action="{{ route('admin.logs.purgar') }}" method="POST">
@@ -538,22 +539,51 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p>¿Está seguro que desea eliminar los logs antiguos?</p>
-                    <p class="text-danger">Esta acción no se puede deshacer.</p>
+                    <div class="alert alert-warning">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                            </div>
+                            <div>
+                                <strong>¡Atención!</strong> Esta acción eliminará permanentemente los registros de logs del sistema.
+                                <br><small>Esta acción no se puede deshacer.</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p>Seleccione el período de logs que desea eliminar:</p>
+                    
                     <div class="form-group">
                         <label for="dias" class="form-label">Eliminar logs de más de:</label>
                         <select class="form-select" id="dias" name="dias">
-                            <option value="30">30 días</option>
+                            <option value="15">15 días</option>
+                            <option value="30" selected>30 días</option>
+                            <option value="45">45 días</option>
                             <option value="60">60 días</option>
                             <option value="90">90 días</option>
+                            <option value="120">4 meses</option>
                             <option value="180">6 meses</option>
                             <option value="365">1 año</option>
                         </select>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Se eliminarán todos los logs anteriores a la fecha seleccionada.
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <strong>Información:</strong> Los logs del sistema contienen información importante sobre la actividad de usuarios y operaciones del sistema. Se recomienda conservar al menos 30 días de registros para auditoría.
+                        </small>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger">Purgar Logs</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-danger" id="confirmPurgeBtn">
+                        <i class="fas fa-trash me-1"></i> Purgar Logs
+                    </button>
                 </div>
             </div>
         </form>

@@ -147,21 +147,31 @@
                         <tr>
                             <td>{{ $log->id }}</td>
                             <td>
-                                @if($log->user)
-                                    <div class="d-flex align-items-center">
-                                        <div class="avatar avatar-sm me-2">
-                                            <div class="avatar-initial rounded-circle bg-primary">
-                                                {{ substr($log->user->nombre, 0, 1) }}{{ substr($log->user->apellido, 0, 1) }}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span class="d-block">{{ $log->user->nombre }} {{ $log->user->apellido }}</span>
-                                            <small class="text-muted">{{ $log->user->role->nombre }}</small>
-                                        </div>
-                                    </div>
-                                @else
-                                    <span class="text-muted">Sistema</span>
-                                @endif
+                               @if($log->user)
+    <div class="d-flex align-items-center">
+        <div class="avatar avatar-sm me-2">
+            <div class="avatar-initial rounded-circle bg-primary">
+                {{ substr($log->user->nombre, 0, 1) }}{{ substr($log->user->apellido, 0, 1) }}
+            </div>
+        </div>
+        <div>
+            <span class="d-block">{{ $log->user->nombre }} {{ $log->user->apellido }}</span>
+            <small class="text-muted">{{ $log->user->role->nombre ?? 'Sin rol' }}</small>
+        </div>
+    </div>
+@else
+    <div class="d-flex align-items-center">
+        <div class="avatar avatar-sm me-2">
+            <div class="avatar-initial rounded-circle bg-secondary">
+                <i class="fas fa-cog fa-sm"></i>
+            </div>
+        </div>
+        <div>
+            <span class="d-block text-muted">Sistema</span>
+            <small class="text-muted">Acción automática</small>
+        </div>
+    </div>
+@endif
                             </td>
                             <td>
                                 <span class="badge 
@@ -216,9 +226,105 @@
             </table>
         </div>
 
-        <!-- Paginación -->
-        <div class="mt-4">
-            {{ $logs->links() }}
+        <!-- Paginación Mejorada -->
+        <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+            <div class="d-flex align-items-center">
+                <small class="text-muted me-3">
+                    Mostrando {{ $logs->firstItem() }} a {{ $logs->lastItem() }} 
+                    de {{ $logs->total() }} registros
+                </small>
+                
+                {{-- Selector de resultados por página --}}
+                <div class="d-flex align-items-center">
+                    <small class="text-muted me-2">Mostrar:</small>
+                    <select class="form-select form-select-sm" style="width: auto;" onchange="changePerPage(this.value)">
+                        <option value="20" {{ request('per_page', 20) == 20 ? 'selected' : '' }}>20</option>
+                        <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50</option>
+                        <option value="100" {{ request('per_page') == 100 ? 'selected' : '' }}>100</option>
+                        <option value="200" {{ request('per_page') == 200 ? 'selected' : '' }}>200</option>
+                    </select>
+                </div>
+            </div>
+            
+            {{-- Paginación personalizada --}}
+            <div class="pagination-wrapper">
+                @if ($logs->hasPages())
+                    <nav aria-label="Navegación de logs">
+                        <ul class="pagination pagination-sm mb-0">
+                            {{-- Botón Anterior --}}
+                            @if ($logs->onFirstPage())
+                                <li class="page-item disabled">
+                                    <span class="page-link">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </span>
+                                </li>
+                            @else
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ $logs->previousPageUrl() }}" rel="prev">
+                                        <i class="fas fa-chevron-left"></i>
+                                    </a>
+                                </li>
+                            @endif
+
+                            {{-- Números de página --}}
+                            @php
+                                $start = max($logs->currentPage() - 2, 1);
+                                $end = min($start + 4, $logs->lastPage());
+                                $start = max($end - 4, 1);
+                            @endphp
+
+                            @if($start > 1)
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ $logs->url(1) }}">1</a>
+                                </li>
+                                @if($start > 2)
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                @endif
+                            @endif
+
+                            @for ($i = $start; $i <= $end; $i++)
+                                @if ($i == $logs->currentPage())
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ $i }}</span>
+                                    </li>
+                                @else
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ $logs->url($i) }}">{{ $i }}</a>
+                                    </li>
+                                @endif
+                            @endfor
+
+                            @if($end < $logs->lastPage())
+                                @if($end < $logs->lastPage() - 1)
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                @endif
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ $logs->url($logs->lastPage()) }}">{{ $logs->lastPage() }}</a>
+                                </li>
+                            @endif
+
+                            {{-- Botón Siguiente --}}
+                            @if ($logs->hasMorePages())
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ $logs->nextPageUrl() }}" rel="next">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </a>
+                                </li>
+                            @else
+                                <li class="page-item disabled">
+                                    <span class="page-link">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </span>
+                                </li>
+                            @endif
+                        </ul>
+                    </nav>
+                @endif
+            </div>
         </div>
     </div>
 </div>
@@ -231,18 +337,18 @@
                 <h5 class="modal-title" id="filtersModalLabel">Filtros Avanzados</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ route('admin.logs') }}" method="GET">
+            <form action="{{ route('admin.logs.index') }}" method="GET">
                 <div class="modal-body">
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="user_id" class="form-label">Usuario</label>
                             <select class="form-select" id="user_id" name="user_id">
                                 <option value="">Todos los usuarios</option>
-                                @foreach($usuarios as $usuario)
-                                    <option value="{{ $usuario->id }}" {{ request('user_id') == $usuario->id ? 'selected' : '' }}>
-                                        {{ $usuario->nombre }} {{ $usuario->apellido }} ({{ $usuario->role->nombre }})
-                                    </option>
-                                @endforeach
+                               @foreach($usuarios as $usuario)
+    <option value="{{ $usuario->id }}" {{ request('user_id') == $usuario->id ? 'selected' : '' }}>
+        {{ $usuario->nombre }} {{ $usuario->apellido }} ({{ $usuario->role->nombre ?? 'Sin rol' }})
+    </option>
+@endforeach
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -286,7 +392,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <a href="{{ route('admin.logs') }}" class="btn btn-outline-secondary">Limpiar Filtros</a>
+                    <a href="{{ route('admin.logs.index') }}" class="btn btn-outline-secondary">Limpiar Filtros</a>
                     <button type="submit" class="btn btn-primary">Aplicar Filtros</button>
                 </div>
             </form>
@@ -294,7 +400,125 @@
     </div>
 </div>
 @endsection
+@section('styles')
+<style>
+/* Avatars para logs */
+.avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
 
+.avatar-sm {
+    width: 2rem;
+    height: 2rem;
+}
+
+.avatar-initial {
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* Corrección de paginación - flechas más pequeñas y elegantes */
+.pagination {
+    margin-bottom: 0;
+}
+
+.pagination .page-link {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+    margin: 0 0.125rem;
+    border: 1px solid #dee2e6;
+    color: #6c757d;
+    text-decoration: none;
+    transition: all 0.15s ease-in-out;
+}
+
+.pagination .page-link:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    color: #495057;
+    transform: translateY(-1px);
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #20c997;
+    border-color: #20c997;
+    color: white;
+    font-weight: 600;
+}
+
+.pagination .page-item.disabled .page-link {
+    color: #adb5bd;
+    background-color: #fff;
+    border-color: #dee2e6;
+    cursor: not-allowed;
+}
+
+/* Flechas de navegación más pequeñas y elegantes */
+.pagination .page-link[rel="prev"],
+.pagination .page-link[rel="next"] {
+    padding: 0.5rem 0.875rem;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* Ocultar el texto original de las flechas y mostrar solo íconos */
+.pagination .page-link[rel="prev"] span,
+.pagination .page-link[rel="next"] span {
+    display: none;
+}
+
+.pagination .page-link[rel="prev"]:after {
+    content: "‹";
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.pagination .page-link[rel="next"]:after {
+    content: "›";
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+/* Estilo para dispositivos móviles */
+@media (max-width: 768px) {
+    .pagination .page-link {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    .pagination .page-link[rel="prev"]:after,
+    .pagination .page-link[rel="next"]:after {
+        font-size: 1rem;
+    }
+}
+
+/* Mejoras adicionales para la tabla de logs */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.badge {
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+.text-truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+</style>
+@endsection
 @section('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -346,5 +570,11 @@
             window.location.href = url.toString();
         }
     });
+     function changePerPage(value) {
+            const url = new URL(window.location);
+            url.searchParams.set('per_page', value);
+            url.searchParams.delete('page'); // Reset a página 1
+            window.location.href = url.toString();
+        }
 </script>
 @endsection

@@ -11,14 +11,35 @@
                 </li>
                 
                 <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('admin.doctores.*') ? 'active' : '' }}" href="{{ route('admin.doctores.index') }}">
-                        <i class="fas fa-user-md"></i>
-                        <span>Doctores</span>
+                    <a class="nav-link {{ request()->routeIs('admin.usuarios.*') ? 'active' : '' }}" href="{{ route('admin.usuarios.index') }}">
+                        <i class="fas fa-users-cog"></i>
+                        <span>Gestión de Usuarios</span>
+                         @php
+                            // CORREGIDO: Usar scopes en lugar de métodos
+                            $usuariosBloqueados = \App\Models\User::bloqueados()->count();
+                            $usuariosConIntentos = \App\Models\User::conIntentosFallidos()->count();
+                        @endphp
+                        @if($usuariosBloqueados > 0)
+                            <span class="badge bg-danger float-end" title="{{ $usuariosBloqueados }} usuarios bloqueados">
+                                {{ $usuariosBloqueados }}
+                            </span>
+                        @elseif($usuariosConIntentos > 0)
+                            <span class="badge bg-warning float-end" title="{{ $usuariosConIntentos }} usuarios con intentos fallidos">
+                                {{ $usuariosConIntentos }}
+                            </span>
+                        @endif
                     </a>
                 </li>
                 
                 <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('admin.logs') ? 'active' : '' }}" href="{{ route('admin.logs') }}">
+                    <a class="nav-link {{ request()->routeIs('admin.doctores.*') ? 'active' : '' }}" href="{{ route('admin.doctores.index') }}">
+                        <i class="fas fa-user-md"></i>
+                        <span>Gestión de Doctores</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                   <a class="nav-link {{ request()->routeIs('admin.logs.index') ? 'active' : '' }}" href="{{ route('admin.logs.index') }}">
                         <i class="fas fa-clipboard-list"></i>
                         <span>Logs del Sistema</span>
                     </a>

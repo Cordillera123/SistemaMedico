@@ -7,6 +7,7 @@ use App\Models\Doctor;
 use App\Models\LogSistema;
 use App\Models\Role;
 use App\Models\User;
+use Carbon\Carbon;
 use Faker\Provider\Base;
 
 use Illuminate\Http\Request;
@@ -139,6 +140,277 @@ class AdminController extends BaseController
             return redirect()->back()
                 ->withErrors(['general' => 'Error al crear doctor: ' . $e->getMessage()])
                 ->withInput();
+        }
+    }
+
+    /**
+     * Mostrar lista de usuarios con información de bloqueo
+     */
+   public function usuariosIndex(Request $request)
+    {
+        $query = User::with('role');
+
+        // Filtros
+        if ($request->filled('estado')) {
+            switch ($request->estado) {
+                case 'bloqueados':
+                    $query->bloqueados();
+                    break;
+                case 'con_intentos':
+                    $query->conIntentosFallidos();
+                    break;
+                case 'inactivos':
+                    $query->where('activo', false);
+                    break;
+                case 'activos':
+                    $query->where('activo', true)->whereNull('bloqueado_hasta');
+                    break;
+            }
+        }
+
+        if ($request->filled('role_id')) {
+            $query->where('role_id', $request->role_id);
+        }
+
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+            $query->where(function($q) use ($buscar) {
+                $q->where('nombre', 'like', "%{$buscar}%")
+                  ->orWhere('apellido', 'like', "%{$buscar}%")
+                  ->orWhere('email', 'like', "%{$buscar}%")
+                  ->orWhere('username', 'like', "%{$buscar}%");
+            });
+        }
+
+        // AGREGADO: Soporte para resultados por página
+        $perPage = $request->get('per_page', 15); // Por defecto 15
+        $perPage = in_array($perPage, [15, 25, 50, 100]) ? $perPage : 15; // Validar valores permitidos
+        
+        $usuarios = $query->latest()->paginate($perPage)->appends($request->query());
+        $roles = Role::all();
+        
+        $stats = [
+            'total' => User::count(),
+            'activos' => User::where('activo', true)->count(),
+            'bloqueados' => User::bloqueados()->count(),
+            'con_intentos' => User::conIntentosFallidos()->count(),
+        ];
+        
+        return view('admin.usuarios.index', compact('usuarios', 'roles', 'stats'));
+    }
+
+    /**
+     * Desbloquear usuario específico
+     */
+    public function desbloquearUsuario($id)
+    {
+        try {
+            $usuario = User::findOrFail($id);
+            
+            if (!$usuario->estaBloqueado()) {
+                return redirect()->back()
+                    ->with('info', "El usuario {$usuario->nombre_completo} no está bloqueado.");
+            }
+
+            $usuario->desbloquear();
+            
+            LogSistema::registrar(
+                'Desbloqueo manual de usuario', 
+                'users', 
+                $usuario->id,
+                "Usuario {$usuario->nombre_completo} desbloqueado manualmente por administrador"
+            );
+
+            return redirect()->back()
+                ->with('success', "Usuario {$usuario->nombre_completo} desbloqueado exitosamente.");
+                
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al desbloquear usuario: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Desbloquear múltiples usuarios
+     */
+    public function desbloquearUsuarios(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'usuarios' => 'required|array|min:1',
+            'usuarios.*' => 'exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors(['usuarios' => 'Debe seleccionar al menos un usuario válido.']);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $usuariosDesbloqueados = [];
+            $usuariosYaDesbloqueados = [];
+            
+            foreach ($request->usuarios as $userId) {
+                $usuario = User::find($userId);
+                
+                if ($usuario->estaBloqueado()) {
+                    $usuario->desbloquear();
+                    $usuariosDesbloqueados[] = $usuario->nombre_completo;
+                    
+                    LogSistema::registrar(
+                        'Desbloqueo masivo de usuario', 
+                        'users', 
+                        $usuario->id,
+                        "Usuario {$usuario->nombre_completo} desbloqueado en operación masiva"
+                    );
+                } else {
+                    $usuariosYaDesbloqueados[] = $usuario->nombre_completo;
+                }
+            }
+            
+            DB::commit();
+            
+            $mensaje = '';
+            if (!empty($usuariosDesbloqueados)) {
+                $mensaje .= 'Usuarios desbloqueados: ' . implode(', ', $usuariosDesbloqueados) . '. ';
+            }
+            if (!empty($usuariosYaDesbloqueados)) {
+                $mensaje .= 'Ya estaban desbloqueados: ' . implode(', ', $usuariosYaDesbloqueados) . '.';
+            }
+            
+            return redirect()->back()->with('success', $mensaje);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al desbloquear usuarios: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Resetear intentos fallidos de un usuario
+     */
+    public function resetearIntentos($id)
+    {
+        try {
+            $usuario = User::findOrFail($id);
+            
+            if ($usuario->intentos_fallidos == 0) {
+                return redirect()->back()
+                    ->with('info', "El usuario {$usuario->nombre_completo} no tiene intentos fallidos.");
+            }
+
+            $intentosAnteriores = $usuario->intentos_fallidos;
+            $usuario->update(['intentos_fallidos' => 0]);
+            
+            LogSistema::registrar(
+                'Reset de intentos fallidos', 
+                'users', 
+                $usuario->id,
+                "Intentos fallidos del usuario {$usuario->nombre_completo} resetreados de {$intentosAnteriores} a 0"
+            );
+
+            return redirect()->back()
+                ->with('success', "Intentos fallidos de {$usuario->nombre_completo} resetreados exitosamente.");
+                
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al resetear intentos: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Activar/Desactivar usuario
+     */
+    public function toggleActivoUsuario($id)
+    {
+        try {
+            $usuario = User::findOrFail($id);
+            
+            $nuevoEstado = !$usuario->activo;
+            $usuario->update(['activo' => $nuevoEstado]);
+            
+            // Si se activa, limpiar bloqueo e intentos
+            if ($nuevoEstado) {
+                $usuario->desbloquear();
+            }
+            
+            LogSistema::registrar(
+                $nuevoEstado ? 'Activación de usuario' : 'Desactivación de usuario', 
+                'users', 
+                $usuario->id,
+                "Usuario {$usuario->nombre_completo} " . ($nuevoEstado ? 'activado' : 'desactivado')
+            );
+
+            $mensaje = "Usuario {$usuario->nombre_completo} " . ($nuevoEstado ? 'activado' : 'desactivado') . " exitosamente.";
+            
+            return redirect()->back()->with('success', $mensaje);
+                
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al cambiar estado del usuario: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Ver detalles de usuario con información de seguridad
+     */
+     public function usuarioShow($id)
+    {
+        $usuario = User::with(['role'])->findOrFail($id);
+        
+        // Obtener información adicional según el rol
+        $infoAdicional = null;
+        if ($usuario->isDoctor()) {
+            $infoAdicional = $usuario->doctor()->with('pacientes')->first();
+        } elseif ($usuario->isPaciente()) {
+            $infoAdicional = $usuario->paciente()->with('doctores')->first();
+        }
+        
+        // Obtener logs recientes del usuario
+        $logsRecientes = LogSistema::where('user_id', $usuario->id)
+            ->latest()
+            ->take(10)
+            ->get();
+        
+        return view('admin.usuarios.show', compact('usuario', 'infoAdicional', 'logsRecientes'));
+    }
+
+    /**
+     * Limpiar todos los usuarios bloqueados cuyo tiempo ya expiró
+     */
+    public function limpiarBloqueos()
+    {
+        try {
+            $usuariosLimpiados = User::whereNotNull('bloqueado_hasta')
+                ->where('bloqueado_hasta', '<=', Carbon::now())
+                ->get();
+            
+            $cantidad = $usuariosLimpiados->count();
+            
+            if ($cantidad > 0) {
+                foreach ($usuariosLimpiados as $usuario) {
+                    $usuario->desbloquear();
+                }
+                
+                LogSistema::registrar(
+                    'Limpieza automática de bloqueos expirados', 
+                    'users', 
+                    null,
+                    "Se limpiaron {$cantidad} bloqueos expirados"
+                );
+                
+                return redirect()->back()
+                    ->with('success', "Se limpiaron {$cantidad} bloqueos expirados.");
+            } else {
+                return redirect()->back()
+                    ->with('info', 'No hay bloqueos expirados para limpiar.');
+            }
+            
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withErrors(['general' => 'Error al limpiar bloqueos: ' . $e->getMessage()]);
         }
     }
 
@@ -371,7 +643,7 @@ public function doctoresForceDestroy($id)
         $logs = $query->latest()->paginate(20);
         
         // Obtener opciones para filtros
-        $usuarios = User::select('id', 'nombre', 'apellido')->get();
+        $usuarios = User::with('role')->select('id', 'nombre', 'apellido', 'role_id')->get();
         $acciones = LogSistema::select('accion')->distinct()->get()->pluck('accion');
         $tablas = LogSistema::select('tabla_afectada')->distinct()->get()->pluck('tabla_afectada');
         
@@ -637,10 +909,18 @@ public function cambiarEmail(Request $request)
     /**
      * Purgar logs antiguos
      */
+/**
+     * Purgar logs antiguos
+     */
     public function purgarLogs(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'dias' => 'required|integer|min:30|max:365',
+            'dias' => 'required|integer|min:15|max:365', // Cambiado de min:30 a min:15
+        ], [
+            'dias.min' => 'El período mínimo para purgar logs es de 15 días.',
+            'dias.max' => 'El período máximo para purgar logs es de 365 días.',
+            'dias.required' => 'Debe seleccionar un período válido.',
+            'dias.integer' => 'El período debe ser un número entero.',
         ]);
 
         if ($validator->fails()) {
@@ -654,20 +934,30 @@ public function cambiarEmail(Request $request)
             $fecha = now()->subDays($request->dias);
             $cantidad = LogSistema::where('created_at', '<', $fecha)->count();
             
+            if ($cantidad == 0) {
+                return redirect()->back()->with('info', "No se encontraron logs anteriores a {$request->dias} días para eliminar.");
+            }
+            
+            // Eliminar los logs antiguos
             LogSistema::where('created_at', '<', $fecha)->delete();
             
-            LogSistema::registrar("Purga de logs: {$cantidad} registros eliminados (más de {$request->dias} días)");
+            // Registrar la acción de purga
+            LogSistema::registrar(
+                "Purga de logs antiguos", 
+                'logs_sistema', 
+                null,
+                "Se eliminaron {$cantidad} registros de logs con más de {$request->dias} días. Fecha límite: {$fecha->format('d/m/Y H:i:s')}"
+            );
             
             DB::commit();
 
-            return redirect()->back()->with('success', "Se eliminaron {$cantidad} registros de logs antiguos");
+            return redirect()->back()->with('success', "✅ Purga completada exitosamente: Se eliminaron {$cantidad} registros de logs anteriores a {$request->dias} días.");
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect()->back()
                 ->withErrors(['general' => 'Error al purgar logs: ' . $e->getMessage()]);
         }
     }
-
     
     
 }

@@ -117,17 +117,7 @@
                     </div>
                 </div>
                 
-                <div class="row">
-                    <div class="col-md-12 mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="confidencial" name="confidencial" {{ old('confidencial') ? 'checked' : '' }}>
-                            <label class="form-check-label" for="confidencial">
-                                Marcar como confidencial
-                            </label>
-                            <small class="form-text text-muted d-block">Los resultados confidenciales solo son visibles para el paciente y los doctores asignados.</small>
-                        </div>
-                    </div>
-                </div>
+                
             </div>
             
             <!-- Archivo PDF -->

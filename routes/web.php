@@ -55,42 +55,54 @@ Route::middleware(['auth'])->group(function () {
         }
     })->name('home');
 
-    // Rutas para administradores
-     Route::prefix('admin')->middleware(['role:administrador'])->group(function () {
+    // === RUTAS PARA ADMINISTRADORES ===
+    Route::prefix('admin')->middleware(['role:administrador'])->group(function () {
         // Dashboard
         Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
         
-        // Gestión de doctores
+        // === GESTIÓN DE USUARIOS (NUEVAS RUTAS) ===
+        Route::prefix('usuarios')->name('admin.usuarios.')->group(function () {
+            Route::get('/', [AdminController::class, 'usuariosIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'usuarioShow'])->name('show');
+            
+            // Acciones de desbloqueo
+            Route::post('/{id}/desbloquear', [AdminController::class, 'desbloquearUsuario'])->name('desbloquear');
+            Route::post('/desbloquear-masivo', [AdminController::class, 'desbloquearUsuarios'])->name('desbloquear-masivo');
+            Route::post('/limpiar-bloqueos', [AdminController::class, 'limpiarBloqueos'])->name('limpiar-bloqueos');
+            
+            // Acciones de gestión
+            Route::post('/{id}/resetear-intentos', [AdminController::class, 'resetearIntentos'])->name('resetear-intentos');
+            Route::post('/{id}/toggle-activo', [AdminController::class, 'toggleActivoUsuario'])->name('toggle-activo');
+        });
+        
+        // === GESTIÓN DE DOCTORES (MANTENIDAS IGUAL) ===
         Route::get('/doctores', [AdminController::class, 'doctoresIndex'])->name('admin.doctores.index');
         Route::get('/doctores/create', [AdminController::class, 'doctoresCreate'])->name('admin.doctores.create');
         Route::post('/doctores', [AdminController::class, 'doctoresStore'])->name('admin.doctores.store');
         Route::get('/doctores/{id}', [AdminController::class, 'doctoresShow'])->name('admin.doctores.show');
         Route::get('/doctores/{id}/edit', [AdminController::class, 'doctoresEdit'])->name('admin.doctores.edit');
         Route::put('/doctores/{id}', [AdminController::class, 'doctoresUpdate'])->name('admin.doctores.update');
-        
-        // RUTAS DE ELIMINACIÓN DE DOCTORES - CORREGIDAS
         Route::delete('/doctores/{id}', [AdminController::class, 'doctoresDestroy'])->name('admin.doctores.destroy');
         Route::delete('/doctores/{id}/force-delete', [AdminController::class, 'doctoresForceDestroy'])->name('admin.doctores.force-destroy');
         
-        // Logs del sistema
-        Route::get('/logs', [AdminController::class, 'logs'])->name('admin.logs');
+        // === LOGS DEL SISTEMA (CORREGIDA COMPLETAMENTE) ===
+    Route::prefix('logs')->name('admin.logs.')->group(function () {
+    Route::get('/', [AdminController::class, 'logs'])->name('index');
+    Route::post('/purgar', [AdminController::class, 'purgarLogs'])->name('purgar');
+    });
         
-        // Configuración del sistema
+        // === CONFIGURACIÓN DEL SISTEMA (MANTENIDAS IGUAL) ===
         Route::get('/configuracion', [AdminController::class, 'configuracion'])->name('admin.configuracion');
         Route::post('/configuracion', [AdminController::class, 'configuracionUpdate'])->name('admin.configuracion.update');
         Route::post('/configuracion/reset', [AdminController::class, 'configuracionReset'])->name('admin.configuracion.reset');
         
-        // Ruta para cambiar email del administrador
-        Route::put('/cambiar-email', [AdminController::class, 'cambiarEmail'])
-            ->name('admin.cambiar-email.update');
-
-        // Ruta para cambiar contraseña del administrador
-        Route::put('/cambiar-password', [AdminController::class, 'cambiarPassword'])
-            ->name('admin.cambiar-password.update');
-            
-        // Mantenimiento
+        // === CAMBIO DE CONTRASEÑA Y EMAIL DEL ADMIN (MANTENIDAS IGUAL) ===
+        Route::put('/cambiar-email', [AdminController::class, 'cambiarEmail'])->name('admin.cambiar-email.update');
+        Route::put('/cambiar-password', [AdminController::class, 'cambiarPassword'])->name('admin.cambiar-password.update');
+        
+        // === MANTENIMIENTO (MANTENIDAS IGUAL) ===
         Route::post('/cache/limpiar', [AdminController::class, 'limpiarCache'])->name('admin.cache.limpiar');
-        Route::post('/logs/purgar', [AdminController::class, 'purgarLogs'])->name('admin.logs.purgar');
+       
     });
 
      Route::prefix('doctor')->middleware(['role:doctor'])->name('doctor.')->group(function () {

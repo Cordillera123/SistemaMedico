@@ -84,7 +84,7 @@
                         <h2 class="stat-card-value">{{ count($ultimosLogs) }}</h2>
                     </div>
                 </div>
-                <a href="{{ route('admin.logs') }}" class="btn btn-sm btn-outline-warning w-100">
+                <a href="{{ route('admin.logs.index') }}" class="btn btn-sm btn-outline-warning w-100">
                     Ver logs <i class="fas fa-arrow-right ms-1"></i>
                 </a>
             </div>
@@ -167,7 +167,7 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">Actividad Reciente</h5>
-                <a href="{{ route('admin.logs') }}" class="btn btn-sm btn-secondary">
+                <a href="{{ route('admin.logs.index') }}" class="btn btn-sm btn-secondary">
                     <i class="fas fa-list me-1"></i> Ver Todos
                 </a>
             </div>

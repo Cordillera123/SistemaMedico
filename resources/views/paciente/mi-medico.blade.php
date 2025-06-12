@@ -17,7 +17,7 @@
 <div class="row">
     <!-- Información de médicos -->
     <div class="col-xl-4 col-lg-5">
-        @if($doctorPrincipal)
+        @if($doctorPrincipal && $doctorPrincipal->user)
             <!-- Médico Principal -->
             <div class="card mb-4">
                 <div class="card-header">
@@ -32,7 +32,7 @@
                         </div>
                     </div>
                     <h4 class="mb-1">Dr(a). {{ $doctorPrincipal->user->nombre }} {{ $doctorPrincipal->user->apellido }}</h4>
-                    <p class="text-muted mb-3">{{ $doctorPrincipal->especialidad }}</p>
+                    <p class="text-muted mb-3">{{ $doctorPrincipal->especialidad ?? 'Especialidad no especificada' }}</p>
                     
                     <div class="d-flex justify-content-center mb-3">
                         @if($doctorPrincipal->user->telefono)
@@ -76,7 +76,8 @@
                 </div>
                 <div class="card-body p-0">
                     @foreach($doctores as $doctor)
-                        @if(!$doctorPrincipal || $doctor->id !== $doctorPrincipal->id)
+                        {{-- CORRECCIÓN: Verificar que doctor y user existan --}}
+                        @if($doctor && $doctor->user && (!$doctorPrincipal || $doctor->id !== $doctorPrincipal->id))
                             <div class="d-flex align-items-center p-3 {{ !$loop->last ? 'border-bottom' : '' }}">
                                 <div class="flex-shrink-0">
                                     <div class="avatar avatar-md">
@@ -87,7 +88,7 @@
                                 </div>
                                 <div class="flex-grow-1 ms-3">
                                     <h6 class="mb-0">Dr(a). {{ $doctor->user->nombre }} {{ $doctor->user->apellido }}</h6>
-                                    <p class="text-muted mb-1 small">{{ $doctor->especialidad }}</p>
+                                    <p class="text-muted mb-1 small">{{ $doctor->especialidad ?? 'Especialidad no especificada' }}</p>
                                     <div class="d-flex align-items-center">
                                         <span class="badge bg-light text-dark me-2">
                                             {{ $estadisticasPorDoctor[$doctor->id]['total_resultados'] ?? 0 }} resultados
@@ -117,7 +118,7 @@
         @endif
         
         <!-- Información de contacto detallada -->
-        @if($doctorReferencia)
+        @if($doctorReferencia && $doctorReferencia->user)
             <div class="card">
                 <div class="card-header">
                     <h5 class="card-title mb-0">Información de Contacto</h5>
@@ -246,24 +247,45 @@
                                             </div>
                                         </td>
                                         <td>
-                                            <div class="d-flex align-items-center">
-                                                <div class="avatar avatar-sm me-2">
-                                                    <div class="avatar-initial rounded-circle bg-primary">
-                                                        {{ substr($resultado->doctor->user->nombre, 0, 1) }}{{ substr($resultado->doctor->user->apellido, 0, 1) }}
+                                            {{-- CORRECCIÓN: Verificar que doctor y user existan --}}
+                                            @if($resultado->doctor && $resultado->doctor->user)
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar avatar-sm me-2">
+                                                        <div class="avatar-initial rounded-circle bg-primary">
+                                                            {{ substr($resultado->doctor->user->nombre, 0, 1) }}{{ substr($resultado->doctor->user->apellido, 0, 1) }}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="small">Dr(a). {{ $resultado->doctor->user->apellido }}</div>
+                                                        @if($doctorPrincipal && $resultado->doctor->id === $doctorPrincipal->id)
+                                                            <span class="badge bg-warning text-dark small">Principal</span>
+                                                        @endif
                                                     </div>
                                                 </div>
-                                                <div>
-                                                    <div class="small">Dr(a). {{ $resultado->doctor->user->apellido }}</div>
-                                                    @if($doctorPrincipal && $resultado->doctor->id === $doctorPrincipal->id)
-                                                        <span class="badge bg-warning text-dark small">Principal</span>
-                                                    @endif
+                                            @else
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar avatar-sm me-2">
+                                                        <div class="avatar-initial rounded-circle bg-secondary">
+                                                            <i class="fas fa-user-md"></i>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="small text-muted">Doctor no disponible</div>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            @endif
                                         </td>
                                         <td>
-                                            <span class="badge bg-light text-dark">
-                                                {{ $resultado->tipoResultado->nombre }}
-                                            </span>
+                                            {{-- CORRECCIÓN: Verificar que tipoResultado exista --}}
+                                            @if($resultado->tipoResultado)
+                                                <span class="badge bg-light text-dark">
+                                                    {{ $resultado->tipoResultado->nombre }}
+                                                </span>
+                                            @else
+                                                <span class="badge bg-light text-dark">
+                                                    Sin tipo
+                                                </span>
+                                            @endif
                                         </td>
                                         <td>{{ $resultado->fecha_resultado->format('d/m/Y') }}</td>
                                         <td>

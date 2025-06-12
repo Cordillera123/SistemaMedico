@@ -159,14 +159,7 @@
                         <span>Última Actualización</span>
                         <span>{{ $doctor->updated_at->format('d/m/Y') }}</span>
                     </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                        <span>Email Verificado</span>
-                        @if($doctor->user->email_verified_at)
-                            <span class="badge bg-success">Verificado</span>
-                        @else
-                            <span class="badge bg-warning">Pendiente</span>
-                        @endif
-                    </li>
+                    
                 </ul>
             </div>
         </div>
